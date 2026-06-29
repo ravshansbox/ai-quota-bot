@@ -19,8 +19,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tempfile::TempDir;
-use time::OffsetDateTime;
 use time::macros::datetime;
+use time::{OffsetDateTime, UtcOffset};
 
 fn credentials() -> ProviderCredentials {
     ProviderCredentials {
@@ -54,6 +54,20 @@ fn codex_snapshot(reset_at: OffsetDateTime, window_id: &str) -> QuotaSnapshot {
         usage: Some(3),
         limit: Some(50),
     }
+}
+
+fn local_time_str(utc: OffsetDateTime) -> String {
+    use time::macros::format_description;
+    let offset = UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC);
+    let local = utc.to_offset(offset);
+    let offset_str = format!("{}", offset);
+    format!(
+        "{} {}",
+        local
+            .format(&format_description!("[hour]:[minute]"))
+            .unwrap_or_else(|_| "?".to_string()),
+        offset_str,
+    )
 }
 
 #[derive(Clone, Default)]
@@ -283,7 +297,10 @@ async fn second_cycle_after_reset_sends_one_notification() {
 
     assert_eq!(
         notifier.messages(),
-        vec!["Claude 5h quota reset at 17:00 UTC".to_string()]
+        vec![format!(
+            "Claude 5h quota reset at {}",
+            local_time_str(datetime!(2026-06-29 17:00 UTC))
+        )]
     );
 }
 
@@ -325,7 +342,10 @@ async fn non_auth_provider_failure_leaves_other_path_runnable() {
 
     assert_eq!(
         notifier.messages(),
-        vec!["Codex 7d quota reset at 00:00 UTC".to_string()]
+        vec![format!(
+            "Codex 7d quota reset at {}",
+            local_time_str(datetime!(2026-07-07 00:00 UTC))
+        )]
     );
     assert_eq!(claude.fetch_tokens(), vec!["claude-token", "claude-token"]);
 }

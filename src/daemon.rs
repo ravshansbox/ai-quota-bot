@@ -9,7 +9,7 @@ use crate::{
     telegram::ResetNotifier,
 };
 use std::time::Duration;
-use time::{OffsetDateTime, macros::format_description};
+use time::{OffsetDateTime, UtcOffset, macros::format_description};
 use tokio::time::sleep;
 use tracing::{info, warn};
 
@@ -166,13 +166,21 @@ where
 }
 
 fn format_reset_time(window_kind: WindowKind, reset_at: OffsetDateTime) -> String {
+    let local = UtcOffset::current_local_offset()
+        .map(|offset| reset_at.to_offset(offset))
+        .unwrap_or(reset_at);
+    let offset_str = UtcOffset::current_local_offset()
+        .map(|o| format!("{o}"))
+        .unwrap_or_else(|_| "UTC".to_string());
+
     match window_kind {
-        // 5h windows reset within hours — show the time.
-        WindowKind::FiveHours => reset_at
-            .format(&format_description!("[hour]:[minute] UTC"))
+        // 5h windows reset within hours — show the local time with offset.
+        WindowKind::FiveHours => local
+            .format(&format_description!("[hour]:[minute]"))
+            .map(|t| format!("{} {}", t, offset_str))
             .unwrap_or_else(|_| "?".to_string()),
-        // 7d windows reset days out — show the short date.
-        WindowKind::SevenDays => reset_at
+        // 7d windows reset days out — show the local short date.
+        WindowKind::SevenDays => local
             .format(&format_description!("[month repr:short] [day]"))
             .unwrap_or_else(|_| "?".to_string()),
     }

@@ -5,7 +5,23 @@ use ai_quota_bot::{
 use httpmock::{Method::POST, MockServer};
 use reqwest::Client;
 use serde_json::json;
-use time::macros::datetime;
+use time::{OffsetDateTime, UtcOffset, macros::datetime};
+
+fn local_offset() -> UtcOffset {
+    UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC)
+}
+
+fn format_local_time(utc: OffsetDateTime) -> String {
+    let local = utc.to_offset(local_offset());
+    let offset_str = format!("{}", local_offset());
+    format!(
+        "{} {}",
+        local
+            .format(&time::macros::format_description!("[hour]:[minute]"))
+            .unwrap_or_else(|_| "?".to_string()),
+        offset_str,
+    )
+}
 
 fn event() -> ResetEvent {
     ResetEvent {
@@ -16,14 +32,6 @@ fn event() -> ResetEvent {
         previous_window_id: Some("old".into()),
         current_window_id: Some("new".into()),
     }
-}
-
-#[test]
-fn telegram_message_matches_expected_format() {
-    assert_eq!(
-        format_reset_message(&event()),
-        "Claude 5h quota reset at 12:00 UTC"
-    );
 }
 
 fn codex_event() -> ResetEvent {
@@ -38,22 +46,37 @@ fn codex_event() -> ResetEvent {
 }
 
 #[test]
-fn telegram_message_formats_codex_weekly_reset() {
-    assert_eq!(
-        format_reset_message(&codex_event()),
-        "Codex 7d quota reset at 00:00 UTC"
+fn telegram_message_matches_expected_format() {
+    let expected = format!(
+        "Claude 5h quota reset at {}",
+        format_local_time(event().reset_at)
     );
+    assert_eq!(format_reset_message(&event()), expected);
+}
+
+#[test]
+fn telegram_message_formats_codex_weekly_reset() {
+    let expected = format!(
+        "Codex 7d quota reset at {}",
+        format_local_time(codex_event().reset_at)
+    );
+    assert_eq!(format_reset_message(&codex_event()), expected);
 }
 
 #[tokio::test]
 async fn telegram_send_reset_posts_expected_payload() {
+    let expected_text = format!(
+        "Claude 5h quota reset at {}",
+        format_local_time(event().reset_at)
+    );
+
     let server = MockServer::start();
     let mock = server.mock(|when, then| {
         when.method(POST)
             .path("/botbot-token/sendMessage")
             .json_body(json!({
                 "chat_id": "1234",
-                "text": "Claude 5h quota reset at 12:00 UTC"
+                "text": expected_text
             }));
         then.status(200)
             .header("content-type", "application/json")
