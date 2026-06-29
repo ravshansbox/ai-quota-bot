@@ -93,20 +93,16 @@ pub fn format_reset_message(event: &ResetEvent) -> String {
     let local = UtcOffset::current_local_offset()
         .map(|offset| event.reset_at.to_offset(offset))
         .unwrap_or(event.reset_at);
-    let offset_str = UtcOffset::current_local_offset()
-        .map(|o| format!("{o}"))
-        .unwrap_or_else(|_| "UTC".to_string());
 
     let time_str = local
         .format(&format_description!("[hour]:[minute]"))
         .unwrap_or_else(|_| "?".to_string());
 
     format!(
-        "{} {} quota reset at {} {}",
+        "{} {} quota reset at {}",
         display_provider(event.provider),
         display_window(event.window_kind),
         time_str,
-        offset_str,
     )
 }
 

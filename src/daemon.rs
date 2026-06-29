@@ -169,15 +169,11 @@ fn format_reset_time(window_kind: WindowKind, reset_at: OffsetDateTime) -> Strin
     let local = UtcOffset::current_local_offset()
         .map(|offset| reset_at.to_offset(offset))
         .unwrap_or(reset_at);
-    let offset_str = UtcOffset::current_local_offset()
-        .map(|o| format!("{o}"))
-        .unwrap_or_else(|_| "UTC".to_string());
 
     match window_kind {
-        // 5h windows reset within hours — show the local time with offset.
+        // 5h windows reset within hours — show the local time.
         WindowKind::FiveHours => local
             .format(&format_description!("[hour]:[minute]"))
-            .map(|t| format!("{} {}", t, offset_str))
             .unwrap_or_else(|_| "?".to_string()),
         // 7d windows reset days out — show the local short date.
         WindowKind::SevenDays => local

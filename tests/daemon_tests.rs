@@ -60,14 +60,9 @@ fn local_time_str(utc: OffsetDateTime) -> String {
     use time::macros::format_description;
     let offset = UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC);
     let local = utc.to_offset(offset);
-    let offset_str = format!("{}", offset);
-    format!(
-        "{} {}",
-        local
-            .format(&format_description!("[hour]:[minute]"))
-            .unwrap_or_else(|_| "?".to_string()),
-        offset_str,
-    )
+    local
+        .format(&format_description!("[hour]:[minute]"))
+        .unwrap_or_else(|_| "?".to_string())
 }
 
 #[derive(Clone, Default)]
