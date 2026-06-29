@@ -143,6 +143,17 @@ fn refresh_is_not_required_without_expiry() {
     ));
 }
 
+#[test]
+fn refresh_is_not_required_outside_leeway() {
+    let creds = credentials(Some(datetime!(2026-06-29 12:06 UTC)));
+
+    assert!(!should_refresh(
+        &creds,
+        datetime!(2026-06-29 12:00 UTC),
+        Duration::minutes(5)
+    ));
+}
+
 #[tokio::test]
 async fn fetch_with_refresh_uses_existing_credentials_when_token_is_fresh() {
     let provider = MockProvider::new(vec![Ok(vec![snapshot()])]);

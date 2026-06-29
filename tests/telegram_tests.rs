@@ -18,11 +18,30 @@ fn event() -> ResetEvent {
     }
 }
 
+fn codex_event() -> ResetEvent {
+    ResetEvent {
+        provider: ProviderKind::Codex,
+        plan: "pro".into(),
+        window_kind: WindowKind::SevenDays,
+        reset_at: datetime!(2026-07-07 00:00 UTC),
+        previous_window_id: Some("old-week".into()),
+        current_window_id: Some("new-week".into()),
+    }
+}
+
 #[test]
 fn telegram_message_matches_expected_format() {
     assert_eq!(
         format_reset_message(&event()),
         "Claude Max 5h quota reset at 12:00 UTC"
+    );
+}
+
+#[test]
+fn telegram_message_formats_codex_weekly_reset() {
+    assert_eq!(
+        format_reset_message(&codex_event()),
+        "Codex Pro 7d quota reset at 00:00 UTC"
     );
 }
 
