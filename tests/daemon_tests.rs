@@ -239,10 +239,7 @@ async fn first_successful_cycle_sends_no_notifications() {
     );
     let mut daemon = Daemon::new(app_config(auth_path), notifier.clone(), claude, codex);
 
-    daemon
-        .run_cycle_at(datetime!(2026-06-29 12:00 UTC))
-        .await
-        .unwrap();
+    daemon.run_cycle_at(datetime!(2026-06-29 12:00 UTC)).await;
 
     assert!(notifier.messages().is_empty());
 }
@@ -281,14 +278,8 @@ async fn second_cycle_after_reset_sends_one_notification() {
     );
     let mut daemon = Daemon::new(app_config(auth_path), notifier.clone(), claude, codex);
 
-    daemon
-        .run_cycle_at(datetime!(2026-06-29 12:00 UTC))
-        .await
-        .unwrap();
-    daemon
-        .run_cycle_at(datetime!(2026-06-29 17:00 UTC))
-        .await
-        .unwrap();
+    daemon.run_cycle_at(datetime!(2026-06-29 12:00 UTC)).await;
+    daemon.run_cycle_at(datetime!(2026-06-29 17:00 UTC)).await;
 
     assert_eq!(
         notifier.messages(),
@@ -329,14 +320,8 @@ async fn non_auth_provider_failure_leaves_other_path_runnable() {
         codex,
     );
 
-    daemon
-        .run_cycle_at(datetime!(2026-06-29 12:00 UTC))
-        .await
-        .unwrap();
-    daemon
-        .run_cycle_at(datetime!(2026-07-07 00:00 UTC))
-        .await
-        .unwrap();
+    daemon.run_cycle_at(datetime!(2026-06-29 12:00 UTC)).await;
+    daemon.run_cycle_at(datetime!(2026-07-07 00:00 UTC)).await;
 
     assert_eq!(
         notifier.messages(),
@@ -378,10 +363,7 @@ async fn auth_failure_triggers_refresh_credentials_once_and_then_succeeds() {
     );
     let mut daemon = Daemon::new(app_config(auth_path), notifier, claude.clone(), codex);
 
-    daemon
-        .run_cycle_at(datetime!(2026-06-29 12:00 UTC))
-        .await
-        .unwrap();
+    daemon.run_cycle_at(datetime!(2026-06-29 12:00 UTC)).await;
 
     assert_eq!(claude.refresh_count(), 1);
     assert_eq!(claude.refresh_tokens(), vec!["stale-token"]);
@@ -403,17 +385,11 @@ async fn auth_file_reload_picks_up_changed_credentials_on_next_cycle() {
         codex.clone(),
     );
 
-    daemon
-        .run_cycle_at(datetime!(2026-06-29 12:00 UTC))
-        .await
-        .unwrap();
+    daemon.run_cycle_at(datetime!(2026-06-29 12:00 UTC)).await;
 
     write_auth_file(&auth_path, "claude-new", "codex-new");
 
-    daemon
-        .run_cycle_at(datetime!(2026-06-29 12:10 UTC))
-        .await
-        .unwrap();
+    daemon.run_cycle_at(datetime!(2026-06-29 12:10 UTC)).await;
 
     assert_eq!(claude.fetch_tokens(), vec!["claude-old", "claude-new"]);
     assert_eq!(codex.fetch_tokens(), vec!["codex-old", "codex-new"]);

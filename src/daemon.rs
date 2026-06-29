@@ -4,7 +4,7 @@ use crate::{
     config::AppConfig,
     detector::ResetDetector,
     error::AppResult,
-    model::{ProviderKind, QuotaSnapshot},
+    model::{ProviderKind, QuotaSnapshot, WindowKind},
     providers::QuotaProvider,
     telegram::ResetNotifier,
 };
@@ -37,12 +37,15 @@ where
         }
     }
 
-    pub async fn run_cycle(&mut self) -> AppResult<()> {
-        self.run_cycle_at(OffsetDateTime::now_utc()).await
-    }
-
-    pub async fn run_cycle_at(&mut self, now: OffsetDateTime) -> AppResult<()> {
-        let mut creds = load_credentials_map(&self.config.auth_path)?;
+    /// Run one poll cycle and return the collected snapshots.
+    pub async fn run_cycle_at(&mut self, now: OffsetDateTime) -> Vec<QuotaSnapshot> {
+        let mut creds = match load_credentials_map(&self.config.auth_path) {
+            Ok(c) => c,
+            Err(e) => {
+                warn!(error = %e, "failed to load credentials");
+                return Vec::new();
+            }
+        };
         let mut snapshots = Vec::new();
 
         self.collect_provider_snapshots(&self.claude, &mut creds, now, &mut snapshots)
@@ -50,19 +53,19 @@ where
         self.collect_provider_snapshots(&self.codex, &mut creds, now, &mut snapshots)
             .await;
 
-        for event in self.detector.detect(snapshots) {
-            self.notifier.notify_reset(&event).await?;
+        for event in self.detector.detect(snapshots.clone()) {
+            if let Err(e) = self.notifier.notify_reset(&event).await {
+                warn!(error = %e, "failed to send reset notification");
+            }
         }
 
-        Ok(())
+        snapshots
     }
 
     pub async fn run_forever(&mut self) -> AppResult<()> {
-        // Run the first cycle immediately on startup instead of
-        // waiting for the first interval tick.
-        if let Err(error) = self.run_cycle().await {
-            warn!(error = %error, "initial poll cycle failed");
-        }
+        // Run the first cycle immediately and send a startup summary.
+        let snapshots = self.run_cycle_at(OffsetDateTime::now_utc()).await;
+        self.send_startup_summary(&snapshots).await;
 
         let interval_secs = self.config.poll_interval_secs;
 
@@ -77,15 +80,38 @@ where
 
             tokio::select! {
                 _ = sleep(delay) => {
-                    if let Err(error) = self.run_cycle().await {
-                        warn!(error = %error, "poll cycle failed");
-                    }
+                    self.run_cycle_at(OffsetDateTime::now_utc()).await;
                 }
                 _ = tokio::signal::ctrl_c() => {
                     info!("shutdown signal received");
                     return Ok(());
                 }
             }
+        }
+    }
+
+    async fn send_startup_summary(&self, snapshots: &[QuotaSnapshot]) {
+        if snapshots.is_empty() {
+            return;
+        }
+
+        // Group snapshots by provider and format a concise summary line per window.
+        let mut tokens: Vec<String> = Vec::new();
+        for s in snapshots {
+            let window_label = match s.window_kind {
+                WindowKind::FiveHours => "5h",
+                WindowKind::SevenDays => "7d",
+            };
+            let pct = match (s.usage, s.limit) {
+                (Some(u), Some(l)) if l > 0 => format!("{}%", u * 100 / l),
+                _ => "?".to_string(),
+            };
+            tokens.push(format!("{}: {} {}", s.plan, window_label, pct));
+        }
+
+        let summary = format!("📊 Quota summary\n{}", tokens.join("\n"));
+        if let Err(e) = self.notifier.notify_text(&summary).await {
+            warn!(error = %e, "failed to send startup summary");
         }
     }
 

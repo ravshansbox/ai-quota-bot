@@ -10,6 +10,12 @@ use time::macros::format_description;
 #[async_trait]
 pub trait ResetNotifier: Send + Sync {
     async fn notify_reset(&self, event: &ResetEvent) -> AppResult<()>;
+
+    /// Send a free-form text message, used for startup summaries etc.
+    /// Default implementation is a no-op so test fakes don't need to override it.
+    async fn notify_text(&self, _text: &str) -> AppResult<()> {
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -24,6 +30,10 @@ pub struct TelegramClient {
 impl ResetNotifier for TelegramClient {
     async fn notify_reset(&self, event: &ResetEvent) -> AppResult<()> {
         self.send_reset(event).await
+    }
+
+    async fn notify_text(&self, text: &str) -> AppResult<()> {
+        self.send_text(text).await
     }
 }
 
@@ -52,10 +62,14 @@ impl TelegramClient {
     }
 
     pub async fn send_reset(&self, event: &ResetEvent) -> AppResult<()> {
+        self.send_text(&format_reset_message(event)).await
+    }
+
+    async fn send_text(&self, text: &str) -> AppResult<()> {
         let url = format!("{}/bot{}/sendMessage", self.api_base, self.bot_token);
         let body = SendMessageBody {
             chat_id: self.chat_id.clone(),
-            text: format_reset_message(event),
+            text: text.to_string(),
         };
 
         self.client
