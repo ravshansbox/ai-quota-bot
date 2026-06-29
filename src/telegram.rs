@@ -1,6 +1,6 @@
 use crate::{
     error::AppResult,
-    model::{ProviderKind, ResetEvent, WindowKind},
+    model::{ProviderKind, ResetEvent, WindowKind, format_remaining},
 };
 use async_trait::async_trait;
 use reqwest::Client;
@@ -91,43 +91,7 @@ struct SendMessageBody {
 }
 
 pub fn format_reset_message(event: &ResetEvent, now: OffsetDateTime) -> String {
-    let dur = if event.reset_at > now {
-        event.reset_at - now
-    } else {
-        return format!(
-            "{} {} remaining: 0m",
-            display_provider(event.provider),
-            display_window(event.window_kind),
-        );
-    };
-
-    let remaining = match event.window_kind {
-        WindowKind::FiveHours => {
-            let total_minutes = dur.whole_minutes();
-            let hours = total_minutes / 60;
-            let minutes = total_minutes % 60;
-            if hours > 0 && minutes > 0 {
-                format!("{}h {}m", hours, minutes)
-            } else if hours > 0 {
-                format!("{}h", hours)
-            } else {
-                format!("{}m", minutes)
-            }
-        }
-        WindowKind::SevenDays => {
-            let total_hours = dur.whole_hours();
-            let days = total_hours / 24;
-            let hours = total_hours % 24;
-            if days > 0 && hours > 0 {
-                format!("{}d {}h", days, hours)
-            } else if days > 0 {
-                format!("{}d", days)
-            } else {
-                format!("{}h", hours)
-            }
-        }
-    };
-
+    let remaining = format_remaining(event.window_kind, event.reset_at, now);
     format!(
         "{} {} remaining: {}",
         display_provider(event.provider),

@@ -76,7 +76,6 @@ fn convert(raw: RawProviderAuth) -> AppResult<ProviderCredentials> {
         refresh_token: raw.refresh_token,
         expires_at,
         account_id: raw.account_id,
-        raw_source: HashMap::new(),
     })
 }
 

@@ -4,7 +4,7 @@ use crate::{
     config::AppConfig,
     detector::ResetDetector,
     error::AppResult,
-    model::{ProviderKind, QuotaSnapshot, WindowKind},
+    model::{ProviderKind, QuotaSnapshot, WindowKind, format_remaining},
     providers::QuotaProvider,
     telegram::ResetNotifier,
 };
@@ -161,45 +161,6 @@ where
             Ok((_creds, provider_snapshots)) => snapshots.extend(provider_snapshots),
             Err(error) => {
                 warn!(provider = provider.kind().as_str(), error = %error, "provider poll failed")
-            }
-        }
-    }
-}
-
-fn format_remaining(
-    window_kind: WindowKind,
-    reset_at: OffsetDateTime,
-    now: OffsetDateTime,
-) -> String {
-    let dur = if reset_at > now {
-        reset_at - now
-    } else {
-        return "0m".to_string();
-    };
-
-    match window_kind {
-        WindowKind::FiveHours => {
-            let total_minutes = dur.whole_minutes();
-            let hours = total_minutes / 60;
-            let minutes = total_minutes % 60;
-            if hours > 0 && minutes > 0 {
-                format!("{}h {}m", hours, minutes)
-            } else if hours > 0 {
-                format!("{}h", hours)
-            } else {
-                format!("{}m", minutes)
-            }
-        }
-        WindowKind::SevenDays => {
-            let total_hours = dur.whole_hours();
-            let days = total_hours / 24;
-            let hours = total_hours % 24;
-            if days > 0 && hours > 0 {
-                format!("{}d {}h", days, hours)
-            } else if days > 0 {
-                format!("{}d", days)
-            } else {
-                format!("{}h", hours)
             }
         }
     }

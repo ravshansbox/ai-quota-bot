@@ -254,7 +254,6 @@ impl QuotaProvider for CodexProvider {
             refresh_token: new_refresh.or_else(|| creds.refresh_token.clone()),
             expires_at,
             account_id: creds.account_id.clone(),
-            raw_source: creds.raw_source.clone(),
         };
 
         // Persist back to auth.json so the new tokens survive restart

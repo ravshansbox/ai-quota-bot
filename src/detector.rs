@@ -50,8 +50,6 @@ impl ResetDetector {
                         plan: snapshot.plan.clone(),
                         window_kind: snapshot.window_kind,
                         reset_at: snapshot.reset_at,
-                        previous_window_id: None,
-                        current_window_id: None,
                     });
                 }
             }
