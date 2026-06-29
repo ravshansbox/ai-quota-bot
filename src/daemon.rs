@@ -174,7 +174,7 @@ fn format_remaining(
     let dur = if reset_at > now {
         reset_at - now
     } else {
-        return "0 m".to_string();
+        return "0m".to_string();
     };
 
     match window_kind {
@@ -183,7 +183,7 @@ fn format_remaining(
             let hours = total_minutes / 60;
             let minutes = total_minutes % 60;
             if hours > 0 && minutes > 0 {
-                format!("{} h {} m", hours, minutes)
+                format!("{} h {}", hours, minutes)
             } else if hours > 0 {
                 format!("{} h", hours)
             } else {
@@ -195,7 +195,7 @@ fn format_remaining(
             let days = total_hours / 24;
             let hours = total_hours % 24;
             if days > 0 && hours > 0 {
-                format!("{} d {} h", days, hours)
+                format!("{} d {}", days, hours)
             } else if days > 0 {
                 format!("{} d", days)
             } else {
