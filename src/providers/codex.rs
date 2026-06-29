@@ -263,6 +263,7 @@ impl QuotaProvider for CodexProvider {
             tracing::warn!(error = %e, "failed to persist refreshed Codex credentials");
         }
 
+        tracing::info!("Codex token refreshed successfully");
         Ok(updated)
     }
 }
