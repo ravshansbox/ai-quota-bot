@@ -1,4 +1,5 @@
 use crate::{
+    auth,
     error::AppResult,
     model::{ProviderCredentials, ProviderKind, QuotaSnapshot, WindowKind},
     providers::{ProviderRequestError, QuotaProvider},
@@ -7,12 +8,14 @@ use anyhow::{Context, anyhow};
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::Deserialize;
+use std::path::PathBuf;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 #[derive(Clone, Debug)]
 pub struct ClaudeProvider {
     client: Client,
     base_url: String,
+    auth_path: Option<PathBuf>,
 }
 
 impl ClaudeProvider {
@@ -24,6 +27,14 @@ impl ClaudeProvider {
         Self {
             client,
             base_url: base_url.into().trim_end_matches('/').to_string(),
+            auth_path: None,
+        }
+    }
+
+    pub fn with_auth_path(self, path: PathBuf) -> Self {
+        Self {
+            auth_path: Some(path),
+            ..self
         }
     }
 }
@@ -57,7 +68,7 @@ impl QuotaProvider for ClaudeProvider {
             .client
             .get(format!("{}/api/oauth/usage", self.base_url))
             .bearer_auth(&creds.access_token)
-            .header("anthropic-beta", "oauth-2025-04-20")
+            .header("anthropic-beta", "claude-code-20250219,oauth-2025-04-20")
             .send()
             .await
             .map_err(|err| ProviderRequestError::Other(err.into()))?;
@@ -114,7 +125,61 @@ impl QuotaProvider for ClaudeProvider {
         &self,
         creds: &ProviderCredentials,
     ) -> AppResult<ProviderCredentials> {
-        Ok(creds.clone())
+        let refresh_token = creds
+            .refresh_token
+            .as_deref()
+            .ok_or_else(|| anyhow!("no refresh token for Claude"))?;
+
+        let resp: serde_json::Value = self
+            .client
+            .post("https://api.anthropic.com/v1/oauth/token")
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .form(&[
+                ("grant_type", "refresh_token"),
+                ("refresh_token", refresh_token),
+                ("client_id", "9d1c250a-e61b-44d9-88ed-5944d1962f5e"),
+            ])
+            .send()
+            .await
+            .context("Claude token refresh request failed")?
+            .error_for_status()
+            .context("Claude token refresh rejected")?
+            .json()
+            .await
+            .context("Claude token refresh response parse failed")?;
+
+        let new_access = resp
+            .get("access_token")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("missing access_token in Claude refresh response"))?
+            .to_string();
+
+        let new_refresh = resp
+            .get("refresh_token")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let expires_at = resp
+            .get("expires_in")
+            .and_then(|v| v.as_i64())
+            .map(|secs| OffsetDateTime::now_utc() + time::Duration::seconds(secs));
+
+        let updated = ProviderCredentials {
+            access_token: new_access,
+            refresh_token: new_refresh.or_else(|| creds.refresh_token.clone()),
+            expires_at,
+            account_id: creds.account_id.clone(),
+            raw_source: creds.raw_source.clone(),
+        };
+
+        // Persist back to auth.json so the new tokens survive restart
+        if let Some(ref auth_path) = self.auth_path
+            && let Err(e) = auth::persist_credentials(auth_path, ProviderKind::Claude, &updated)
+        {
+            tracing::warn!(error = %e, "failed to persist refreshed Claude credentials");
+        }
+
+        Ok(updated)
     }
 }
 

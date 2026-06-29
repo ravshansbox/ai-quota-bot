@@ -415,7 +415,7 @@ async fn claude_adapter_parses_five_hour_window() {
         when.method(GET)
             .path("/api/oauth/usage")
             .header("authorization", "Bearer token")
-            .header("anthropic-beta", "oauth-2025-04-20");
+            .header("anthropic-beta", "claude-code-20250219,oauth-2025-04-20");
         then.status(200)
             .header("content-type", "application/json")
             .body(support::claude_usage_response());

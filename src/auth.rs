@@ -3,12 +3,12 @@ use crate::{
     model::{ProviderCredentials, ProviderKind},
 };
 use anyhow::{Context, anyhow};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs, path::Path};
 use time::OffsetDateTime;
 
 /// Matches the real `~/.pi/agent/auth.json` format.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct RawAuthFile {
     #[serde(alias = "claude")]
     anthropic: Option<RawProviderAuth>,
@@ -17,9 +17,11 @@ struct RawAuthFile {
     openai_codex: Option<RawProviderAuth>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct RawProviderAuth {
-    /// ignore the `type` discriminator
+    /// The OAuth type discriminator (e.g. "oauth")
+    #[serde(rename = "type", default = "default_oauth_type")]
+    type_: String,
     #[serde(rename = "access")]
     access_token: String,
     #[serde(rename = "refresh")]
@@ -27,8 +29,12 @@ struct RawProviderAuth {
     /// epoch milliseconds
     #[serde(rename = "expires")]
     expires_ms: Option<i64>,
-    #[serde(rename = "accountId")]
+    #[serde(rename = "accountId", skip_serializing_if = "Option::is_none")]
     account_id: Option<String>,
+}
+
+fn default_oauth_type() -> String {
+    "oauth".to_string()
 }
 
 pub fn load_credentials_map(path: &Path) -> AppResult<HashMap<ProviderKind, ProviderCredentials>> {
@@ -72,6 +78,35 @@ fn convert(raw: RawProviderAuth) -> AppResult<ProviderCredentials> {
         account_id: raw.account_id,
         raw_source: HashMap::new(),
     })
+}
+
+/// Write updated credentials back to the auth.json file.
+pub fn persist_credentials(
+    path: &Path,
+    kind: ProviderKind,
+    creds: &ProviderCredentials,
+) -> AppResult<()> {
+    let raw =
+        fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
+    let mut parsed: RawAuthFile = serde_json::from_str(&raw).context("invalid auth json")?;
+
+    let target = match kind {
+        ProviderKind::Claude => &mut parsed.anthropic,
+        ProviderKind::Codex => &mut parsed.openai_codex,
+    };
+
+    if let Some(entry) = target {
+        entry.access_token = creds.access_token.clone();
+        entry.refresh_token.clone_from(&creds.refresh_token);
+        entry.expires_ms = creds
+            .expires_at
+            .map(|dt| dt.unix_timestamp_nanos() as i64 / 1_000_000);
+        entry.account_id.clone_from(&creds.account_id);
+    }
+
+    let out = serde_json::to_string_pretty(&parsed).context("failed to serialize updated auth")?;
+    fs::write(path, &out).with_context(|| format!("failed to write {}", path.display()))?;
+    Ok(())
 }
 
 #[cfg(test)]
