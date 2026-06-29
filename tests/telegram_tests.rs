@@ -33,7 +33,7 @@ fn telegram_message_matches_expected_format() {
     let now = datetime!(2026-06-29 09:00 UTC);
     assert_eq!(
         format_reset_message(&event(), now),
-        "Claude 5h remaining: 3 h"
+        "Claude 5h remaining: 3h"
     );
 }
 
@@ -42,7 +42,7 @@ fn telegram_message_formats_codex_weekly_reset() {
     let now = datetime!(2026-07-04 00:00 UTC);
     assert_eq!(
         format_reset_message(&codex_event(), now),
-        "Codex 7d remaining: 3 d"
+        "Codex 7d remaining: 3d"
     );
 }
 
