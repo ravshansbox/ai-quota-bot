@@ -18,6 +18,14 @@ fn event() -> ResetEvent {
     }
 }
 
+#[test]
+fn telegram_message_matches_expected_format() {
+    assert_eq!(
+        format_reset_message(&event()),
+        "Claude 5h quota reset at 12:00 UTC"
+    );
+}
+
 fn codex_event() -> ResetEvent {
     ResetEvent {
         provider: ProviderKind::Codex,
@@ -30,18 +38,10 @@ fn codex_event() -> ResetEvent {
 }
 
 #[test]
-fn telegram_message_matches_expected_format() {
-    assert_eq!(
-        format_reset_message(&event()),
-        "Claude Max 5h quota reset at 12:00 UTC"
-    );
-}
-
-#[test]
 fn telegram_message_formats_codex_weekly_reset() {
     assert_eq!(
         format_reset_message(&codex_event()),
-        "Codex Pro 7d quota reset at 00:00 UTC"
+        "Codex 7d quota reset at 00:00 UTC"
     );
 }
 
@@ -53,7 +53,7 @@ async fn telegram_send_reset_posts_expected_payload() {
             .path("/botbot-token/sendMessage")
             .json_body(json!({
                 "chat_id": "1234",
-                "text": "Claude Max 5h quota reset at 12:00 UTC"
+                "text": "Claude 5h quota reset at 12:00 UTC"
             }));
         then.status(200)
             .header("content-type", "application/json")

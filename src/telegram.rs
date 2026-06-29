@@ -91,9 +91,8 @@ struct SendMessageBody {
 
 pub fn format_reset_message(event: &ResetEvent) -> String {
     format!(
-        "{} {} {} quota reset at {} UTC",
+        "{} {} quota reset at {} UTC",
         display_provider(event.provider),
-        capitalize(&event.plan),
         display_window(event.window_kind),
         event
             .reset_at
@@ -113,17 +112,5 @@ fn display_window(window: WindowKind) -> &'static str {
     match window {
         WindowKind::FiveHours => "5h",
         WindowKind::SevenDays => "7d",
-    }
-}
-
-fn capitalize(plan: &str) -> String {
-    let mut chars = plan.chars();
-    match chars.next() {
-        Some(first) => {
-            let mut capitalized = first.to_uppercase().collect::<String>();
-            capitalized.push_str(chars.as_str());
-            capitalized
-        }
-        None => String::new(),
     }
 }
