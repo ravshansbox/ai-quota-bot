@@ -19,10 +19,11 @@ impl AppConfig {
 
         let auth_path = env::var("AI_QUOTA_AUTH_PATH")
             .map(PathBuf::from)
-            .unwrap_or_else(|_| {
-                let home = env::var("HOME").unwrap_or_else(|_| String::from("~"));
-                PathBuf::from(home).join(".pi/agent/auth.json")
-            });
+            .or_else(|_| {
+                env::var("HOME")
+                    .map(|home| PathBuf::from(home).join(".pi/agent/auth.json"))
+                    .map_err(|_| anyhow!("missing AI_QUOTA_AUTH_PATH and HOME"))
+            })?;
 
         let poll_interval_secs = env::var("AI_QUOTA_POLL_INTERVAL_SECS")
             .ok()
