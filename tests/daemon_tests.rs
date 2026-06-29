@@ -171,20 +171,21 @@ fn app_config(auth_path: PathBuf) -> AppConfig {
     }
 }
 
-fn write_auth_file(path: &Path, claude_access_token: &str, codex_access_token: &str) {
+fn write_auth_file(path: &Path, anthropic_access_token: &str, codex_access_token: &str) {
     let body = format!(
         r#"{{
-  "claude": {{
-    "access_token": "{claude_access_token}",
-    "refresh_token": "claude-refresh",
-    "expires_at": null,
-    "account_id": "claude-account"
+  "anthropic": {{
+    "type": "oauth",
+    "access": "{anthropic_access_token}",
+    "refresh": "claude-refresh",
+    "expires": null
   }},
-  "codex": {{
-    "access_token": "{codex_access_token}",
-    "refresh_token": "codex-refresh",
-    "expires_at": null,
-    "account_id": "codex-account"
+  "openai-codex": {{
+    "type": "oauth",
+    "access": "{codex_access_token}",
+    "refresh": "codex-refresh",
+    "expires": null,
+    "accountId": "codex-account"
   }}
 }}"#
     );
