@@ -4,19 +4,7 @@ use ai_quota_bot::{
 };
 use httpmock::{Method::POST, MockServer};
 use reqwest::Client;
-use serde_json::json;
-use time::{OffsetDateTime, UtcOffset, macros::datetime};
-
-fn local_offset() -> UtcOffset {
-    UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC)
-}
-
-fn format_local_time(utc: OffsetDateTime) -> String {
-    let local = utc.to_offset(local_offset());
-    local
-        .format(&time::macros::format_description!("[hour]:[minute]"))
-        .unwrap_or_else(|_| "?".to_string())
-}
+use time::macros::datetime;
 
 fn event() -> ResetEvent {
     ResetEvent {
@@ -24,8 +12,8 @@ fn event() -> ResetEvent {
         plan: "max".into(),
         window_kind: WindowKind::FiveHours,
         reset_at: datetime!(2026-06-29 12:00 UTC),
-        previous_window_id: Some("old".into()),
-        current_window_id: Some("new".into()),
+        previous_window_id: None,
+        current_window_id: None,
     }
 }
 
@@ -35,44 +23,37 @@ fn codex_event() -> ResetEvent {
         plan: "pro".into(),
         window_kind: WindowKind::SevenDays,
         reset_at: datetime!(2026-07-07 00:00 UTC),
-        previous_window_id: Some("old-week".into()),
-        current_window_id: Some("new-week".into()),
+        previous_window_id: None,
+        current_window_id: None,
     }
 }
 
 #[test]
 fn telegram_message_matches_expected_format() {
-    let expected = format!(
-        "Claude 5h quota reset at {}",
-        format_local_time(event().reset_at)
+    let now = datetime!(2026-06-29 09:00 UTC);
+    assert_eq!(
+        format_reset_message(&event(), now),
+        "Claude 5h remaining: 3h"
     );
-    assert_eq!(format_reset_message(&event()), expected);
 }
 
 #[test]
 fn telegram_message_formats_codex_weekly_reset() {
-    let expected = format!(
-        "Codex 7d quota reset at {}",
-        format_local_time(codex_event().reset_at)
+    let now = datetime!(2026-07-04 00:00 UTC);
+    assert_eq!(
+        format_reset_message(&codex_event(), now),
+        "Codex 7d remaining: 3d"
     );
-    assert_eq!(format_reset_message(&codex_event()), expected);
 }
 
 #[tokio::test]
 async fn telegram_send_reset_posts_expected_payload() {
-    let expected_text = format!(
-        "Claude 5h quota reset at {}",
-        format_local_time(event().reset_at)
-    );
-
     let server = MockServer::start();
     let mock = server.mock(|when, then| {
         when.method(POST)
             .path("/botbot-token/sendMessage")
-            .json_body(json!({
-                "chat_id": "1234",
-                "text": expected_text
-            }));
+            .body_contains("1234")
+            .body_contains("Claude 5h remaining");
         then.status(200)
             .header("content-type", "application/json")
             .body(r#"{"ok":true,"result":{"message_id":1}}"#);

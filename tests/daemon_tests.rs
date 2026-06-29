@@ -19,8 +19,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tempfile::TempDir;
+use time::OffsetDateTime;
 use time::macros::datetime;
-use time::{OffsetDateTime, UtcOffset};
 
 fn credentials() -> ProviderCredentials {
     ProviderCredentials {
@@ -56,15 +56,6 @@ fn codex_snapshot(reset_at: OffsetDateTime, window_id: &str, usage: u64) -> Quot
     }
 }
 
-fn local_time_str(utc: OffsetDateTime) -> String {
-    use time::macros::format_description;
-    let offset = UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC);
-    let local = utc.to_offset(offset);
-    local
-        .format(&format_description!("[hour]:[minute]"))
-        .unwrap_or_else(|_| "?".to_string())
-}
-
 #[derive(Clone, Default)]
 struct FakeNotifier {
     sent: Arc<Mutex<Vec<String>>>,
@@ -79,7 +70,10 @@ impl FakeNotifier {
 #[async_trait]
 impl ResetNotifier for FakeNotifier {
     async fn notify_reset(&self, event: &ResetEvent) -> Result<()> {
-        self.sent.lock().unwrap().push(format_reset_message(event));
+        self.sent
+            .lock()
+            .unwrap()
+            .push(format_reset_message(event, event.reset_at));
         Ok(())
     }
 }
@@ -298,10 +292,7 @@ async fn second_cycle_after_reset_sends_one_notification() {
 
     assert_eq!(
         notifier.messages(),
-        vec![format!(
-            "Claude 5h quota reset at {}",
-            local_time_str(datetime!(2026-06-29 17:00 UTC))
-        )]
+        vec!["Claude 5h remaining: 0m".to_string()]
     );
 }
 
@@ -345,10 +336,7 @@ async fn non_auth_provider_failure_leaves_other_path_runnable() {
 
     assert_eq!(
         notifier.messages(),
-        vec![format!(
-            "Codex 7d quota reset at {}",
-            local_time_str(datetime!(2026-07-07 00:00 UTC))
-        )]
+        vec!["Codex 7d remaining: 0m".to_string()]
     );
     assert_eq!(claude.fetch_tokens(), vec!["claude-token", "claude-token"]);
 }

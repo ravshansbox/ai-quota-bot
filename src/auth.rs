@@ -114,10 +114,7 @@ mod tests {
 
         let codex = map.get(&ProviderKind::Codex).unwrap();
         assert_eq!(codex.access_token, "codex-access-token");
-        assert_eq!(
-            codex.refresh_token.as_deref(),
-            Some("codex-refresh-token")
-        );
+        assert_eq!(codex.refresh_token.as_deref(), Some("codex-refresh-token"));
         assert!(codex.expires_at.is_some());
         assert_eq!(codex.account_id.as_deref(), Some("acct-123"));
     }
