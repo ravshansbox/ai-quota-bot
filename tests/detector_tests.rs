@@ -7,7 +7,6 @@ use time::macros::datetime;
 fn snapshot(reset_at: time::OffsetDateTime, window_id: &str, usage: u64) -> QuotaSnapshot {
     QuotaSnapshot {
         provider: ProviderKind::Claude,
-        plan: "max".into(),
         window_kind: WindowKind::FiveHours,
         window_id: Some(window_id.into()),
         reset_at,
@@ -32,7 +31,6 @@ fn usage_drop_detects_reset() {
     let events = detector.detect(vec![snapshot(datetime!(2026-06-29 17:00 UTC), "b", 0)]);
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].provider, ProviderKind::Claude);
-    assert_eq!(events[0].plan, "max");
     assert_eq!(events[0].window_kind, WindowKind::FiveHours);
 }
 

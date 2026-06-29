@@ -24,7 +24,6 @@ fn credentials(expires_at: Option<OffsetDateTime>) -> ProviderCredentials {
 fn snapshot() -> QuotaSnapshot {
     QuotaSnapshot {
         provider: ProviderKind::Claude,
-        plan: "max".into(),
         window_kind: WindowKind::FiveHours,
         window_id: Some("window-a".into()),
         reset_at: datetime!(2026-06-29 17:00 UTC),

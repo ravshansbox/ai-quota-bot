@@ -4,7 +4,6 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct SnapshotKey {
     provider: ProviderKind,
-    plan: String,
     window_kind: WindowKind,
 }
 
@@ -29,7 +28,6 @@ impl ResetDetector {
         for snapshot in current {
             let key = SnapshotKey {
                 provider: snapshot.provider,
-                plan: snapshot.plan.clone(),
                 window_kind: snapshot.window_kind,
             };
 
@@ -47,7 +45,6 @@ impl ResetDetector {
                 if dropped >= 5 && timestamp_changed {
                     events.push(ResetEvent {
                         provider: snapshot.provider,
-                        plan: snapshot.plan.clone(),
                         window_kind: snapshot.window_kind,
                         reset_at: snapshot.reset_at,
                     });

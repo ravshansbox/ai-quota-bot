@@ -34,7 +34,6 @@ fn credentials() -> ProviderCredentials {
 fn claude_snapshot(reset_at: OffsetDateTime, window_id: &str, usage: u64) -> QuotaSnapshot {
     QuotaSnapshot {
         provider: ProviderKind::Claude,
-        plan: "max".into(),
         window_kind: WindowKind::FiveHours,
         window_id: Some(window_id.into()),
         reset_at,
@@ -46,7 +45,6 @@ fn claude_snapshot(reset_at: OffsetDateTime, window_id: &str, usage: u64) -> Quo
 fn codex_snapshot(reset_at: OffsetDateTime, window_id: &str, usage: u64) -> QuotaSnapshot {
     QuotaSnapshot {
         provider: ProviderKind::Codex,
-        plan: "pro".into(),
         window_kind: WindowKind::SevenDays,
         window_id: Some(window_id.into()),
         reset_at,
@@ -430,7 +428,6 @@ async fn claude_adapter_parses_five_hour_window() {
         .find(|s| s.window_kind == WindowKind::FiveHours)
         .unwrap();
     assert_eq!(five_hour.provider, ProviderKind::Claude);
-    assert_eq!(five_hour.plan, "max");
     assert_eq!(five_hour.usage, Some(12));
     assert_eq!(five_hour.limit, Some(100));
 
@@ -477,7 +474,6 @@ async fn codex_adapter_parses_seven_day_window() {
         .find(|s| s.window_kind == WindowKind::SevenDays)
         .unwrap();
     assert_eq!(seven_day.provider, ProviderKind::Codex);
-    assert_eq!(seven_day.plan, "pro");
     assert_eq!(seven_day.usage, Some(25));
     assert_eq!(seven_day.limit, Some(100));
 }
