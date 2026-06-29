@@ -424,25 +424,36 @@ async fn claude_adapter_parses_five_hour_window() {
     let server = MockServer::start();
     let mock = server.mock(|when, then| {
         when.method(GET)
-            .path("/usage")
-            .header("authorization", "Bearer token");
+            .path("/api/oauth/usage")
+            .header("authorization", "Bearer token")
+            .header("anthropic-beta", "oauth-2025-04-20");
         then.status(200)
             .header("content-type", "application/json")
-            .body(support::claude_usage_response("2026-06-29T17:00:00Z"));
+            .body(support::claude_usage_response());
     });
 
     let provider = ClaudeProvider::new(server.url(""));
     let snapshots = provider.fetch_snapshots(&credentials()).await.unwrap();
 
     mock.assert();
-    assert_eq!(snapshots.len(), 1);
-    let snapshot = &snapshots[0];
-    assert_eq!(snapshot.provider, ProviderKind::Claude);
-    assert_eq!(snapshot.plan, "max");
-    assert_eq!(snapshot.window_kind, WindowKind::FiveHours);
-    assert_eq!(snapshot.window_id.as_deref(), Some("claude-window"));
-    assert_eq!(snapshot.usage, Some(12));
-    assert_eq!(snapshot.limit, Some(100));
+    // Claude returns 2 windows (5h, 7d) from the real endpoint
+    assert_eq!(snapshots.len(), 2);
+
+    let five_hour = snapshots
+        .iter()
+        .find(|s| s.window_kind == WindowKind::FiveHours)
+        .unwrap();
+    assert_eq!(five_hour.provider, ProviderKind::Claude);
+    assert_eq!(five_hour.plan, "max");
+    assert_eq!(five_hour.usage, Some(12));
+    assert_eq!(five_hour.limit, Some(100));
+
+    let seven_day = snapshots
+        .iter()
+        .find(|s| s.window_kind == WindowKind::SevenDays)
+        .unwrap();
+    assert_eq!(seven_day.provider, ProviderKind::Claude);
+    assert_eq!(seven_day.usage, Some(33));
 }
 
 #[tokio::test]
@@ -450,32 +461,46 @@ async fn codex_adapter_parses_seven_day_window() {
     let server = MockServer::start();
     let mock = server.mock(|when, then| {
         when.method(GET)
-            .path("/usage")
-            .header("authorization", "Bearer token");
+            .path("/backend-api/wham/usage")
+            .header("authorization", "Bearer token")
+            .header("ChatGPT-Account-Id", "codex-account");
         then.status(200)
             .header("content-type", "application/json")
-            .body(support::codex_usage_response("2026-06-30T00:00:00Z"));
+            .body(support::codex_usage_response());
     });
 
+    let mut creds = credentials();
+    creds.account_id = Some("codex-account".into());
+
     let provider = CodexProvider::new(server.url(""));
-    let snapshots = provider.fetch_snapshots(&credentials()).await.unwrap();
+    let snapshots = provider.fetch_snapshots(&creds).await.unwrap();
 
     mock.assert();
-    assert_eq!(snapshots.len(), 1);
-    let snapshot = &snapshots[0];
-    assert_eq!(snapshot.provider, ProviderKind::Codex);
-    assert_eq!(snapshot.plan, "pro");
-    assert_eq!(snapshot.window_kind, WindowKind::SevenDays);
-    assert_eq!(snapshot.window_id.as_deref(), Some("codex-window"));
-    assert_eq!(snapshot.usage, Some(3));
-    assert_eq!(snapshot.limit, Some(50));
+    // Codex returns 2 windows (5h, 7d) from the real endpoint
+    assert_eq!(snapshots.len(), 2);
+
+    let five_hour = snapshots
+        .iter()
+        .find(|s| s.window_kind == WindowKind::FiveHours)
+        .unwrap();
+    assert_eq!(five_hour.provider, ProviderKind::Codex);
+    assert_eq!(five_hour.usage, Some(6));
+
+    let seven_day = snapshots
+        .iter()
+        .find(|s| s.window_kind == WindowKind::SevenDays)
+        .unwrap();
+    assert_eq!(seven_day.provider, ProviderKind::Codex);
+    assert_eq!(seven_day.plan, "pro");
+    assert_eq!(seven_day.usage, Some(25));
+    assert_eq!(seven_day.limit, Some(100));
 }
 
 #[tokio::test]
 async fn unauthorized_provider_response_maps_to_authentication_error() {
     let server = MockServer::start();
     let mock = server.mock(|when, then| {
-        when.method(GET).path("/usage");
+        when.method(GET).path("/api/oauth/usage");
         then.status(401);
     });
 

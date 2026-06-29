@@ -5,7 +5,7 @@ use crate::{
 };
 use anyhow::{Context, anyhow};
 use async_trait::async_trait;
-use reqwest::{Client, StatusCode};
+use reqwest::Client;
 use serde::Deserialize;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
@@ -28,14 +28,19 @@ impl ClaudeProvider {
     }
 }
 
+/// Real Anthropic OAuth usage endpoint
+/// https://api.anthropic.com/api/oauth/usage
 #[derive(Debug, Deserialize)]
-struct UsageResponse {
-    plan: String,
-    window_kind: String,
-    window_id: Option<String>,
-    reset_at: String,
-    usage: Option<u64>,
-    limit: Option<u64>,
+struct AnthropicUsageResponse {
+    five_hour: Option<WindowEntry>,
+    seven_day: Option<WindowEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct WindowEntry {
+    utilization: f64,
+    #[serde(rename = "resets_at")]
+    resets_at: Option<String>,
 }
 
 #[async_trait]
@@ -50,38 +55,59 @@ impl QuotaProvider for ClaudeProvider {
     ) -> Result<Vec<QuotaSnapshot>, ProviderRequestError> {
         let response = self
             .client
-            .get(format!("{}/usage", self.base_url))
+            .get(format!("{}/api/oauth/usage", self.base_url))
             .bearer_auth(&creds.access_token)
+            .header("anthropic-beta", "oauth-2025-04-20")
             .send()
             .await
             .map_err(|err| ProviderRequestError::Other(err.into()))?;
 
-        if response.status() == StatusCode::UNAUTHORIZED {
+        if response.status() == reqwest::StatusCode::UNAUTHORIZED {
             return Err(ProviderRequestError::Authentication);
         }
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            return Err(ProviderRequestError::Other(anyhow!(
+                "usage endpoint not found at {}/api/oauth/usage",
+                self.base_url
+            )));
+        }
 
-        let response = response
+        let payload: AnthropicUsageResponse = response
             .error_for_status()
-            .map_err(|err| ProviderRequestError::Other(err.into()))?;
-        let payload: UsageResponse = response
+            .map_err(|err| ProviderRequestError::Other(err.into()))?
             .json()
             .await
             .map_err(|err| ProviderRequestError::Other(err.into()))?;
-        let window_kind =
-            parse_window_kind(&payload.window_kind).map_err(ProviderRequestError::Other)?;
-        let reset_at = OffsetDateTime::parse(&payload.reset_at, &Rfc3339)
-            .context("failed to parse Claude reset_at as RFC3339")
-            .map_err(ProviderRequestError::Other)?;
 
-        Ok(vec![QuotaSnapshot {
-            provider: ProviderKind::Claude,
-            plan: payload.plan,
-            window_kind,
-            window_id: payload.window_id,
-            reset_at,
-            usage: payload.usage,
-            limit: payload.limit,
-        }])
+        let mut snapshots = Vec::new();
+
+        if let Some(entry) = payload.five_hour {
+            let reset_at = parse_reset_at(entry.resets_at.as_deref())?;
+            snapshots.push(QuotaSnapshot {
+                provider: ProviderKind::Claude,
+                plan: "max".into(),
+                window_kind: WindowKind::FiveHours,
+                window_id: Some(format!("5h-{}", reset_at.unix_timestamp())),
+                reset_at,
+                usage: Some(entry.utilization as u64),
+                limit: Some(100),
+            });
+        }
+
+        if let Some(entry) = payload.seven_day {
+            let reset_at = parse_reset_at(entry.resets_at.as_deref())?;
+            snapshots.push(QuotaSnapshot {
+                provider: ProviderKind::Claude,
+                plan: "max".into(),
+                window_kind: WindowKind::SevenDays,
+                window_id: Some(format!("7d-{}", reset_at.unix_timestamp())),
+                reset_at,
+                usage: Some(entry.utilization as u64),
+                limit: Some(100),
+            });
+        }
+
+        Ok(snapshots)
     }
 
     async fn refresh_credentials(
@@ -92,11 +118,11 @@ impl QuotaProvider for ClaudeProvider {
     }
 }
 
-fn parse_window_kind(raw: &str) -> anyhow::Result<WindowKind> {
+fn parse_reset_at(raw: Option<&str>) -> Result<OffsetDateTime, ProviderRequestError> {
     match raw {
-        "5h" => Ok(WindowKind::FiveHours),
-        "7d" => Ok(WindowKind::SevenDays),
-        other => Err(anyhow!("unsupported Claude window kind: {other}"))
-            .context("failed to parse Claude usage response"),
+        Some(s) => OffsetDateTime::parse(s, &Rfc3339)
+            .context("invalid reset_at RFC3339")
+            .map_err(ProviderRequestError::Other),
+        None => Ok(OffsetDateTime::now_utc()),
     }
 }
