@@ -4,14 +4,25 @@ use crate::{
     config::AppConfig,
     detector::ResetDetector,
     error::AppResult,
-    model::{ProviderKind, QuotaSnapshot, WindowKind, format_remaining},
+    model::{ProviderKind, QuotaSnapshot, ResetEvent, WindowKind, format_remaining},
     providers::QuotaProvider,
     telegram::ResetNotifier,
 };
+use std::collections::HashSet;
 use std::time::Duration;
 use time::OffsetDateTime;
 use tokio::time::sleep;
 use tracing::{info, warn};
+
+#[derive(Debug, Clone)]
+struct ScheduledReset {
+    provider: ProviderKind,
+    window_kind: WindowKind,
+    reset_at: OffsetDateTime,
+    usage: Option<u64>,
+    limit: Option<u64>,
+    done: bool,
+}
 
 pub struct Daemon<P1, P2, N> {
     pub config: AppConfig,
@@ -19,6 +30,11 @@ pub struct Daemon<P1, P2, N> {
     pub claude: P1,
     pub codex: P2,
     pub detector: ResetDetector,
+    /// Pending scheduled reset notifications.
+    scheduled: Vec<ScheduledReset>,
+    /// Windows for which a scheduled notification has already been fired.
+    /// The detector uses this to avoid sending a duplicate on the next poll.
+    pub scheduled_fired: HashSet<(ProviderKind, WindowKind)>,
 }
 
 impl<P1, P2, N> Daemon<P1, P2, N>
@@ -34,6 +50,8 @@ where
             claude,
             codex,
             detector: ResetDetector::default(),
+            scheduled: Vec::new(),
+            scheduled_fired: HashSet::new(),
         }
     }
 
@@ -69,6 +87,16 @@ where
         }
 
         for event in self.detector.detect(snapshots.clone()) {
+            let key = (event.provider, event.window_kind);
+            // Skip if a scheduled notification already fired for this window.
+            if self.scheduled_fired.remove(&key) {
+                info!(
+                    provider = event.provider.as_str(),
+                    window = event.window_kind.as_str(),
+                    "reset already notified via scheduler, skipping detector duplicate"
+                );
+                continue;
+            }
             info!(
                 provider = event.provider.as_str(),
                 window = event.window_kind.as_str(),
@@ -84,29 +112,115 @@ where
 
     pub async fn run_forever(&mut self) -> AppResult<()> {
         // Run the first cycle immediately and send a startup summary.
-        let snapshots = self.run_cycle_at(OffsetDateTime::now_utc()).await;
-        self.send_startup_summary(&snapshots, OffsetDateTime::now_utc())
-            .await;
+        let now = OffsetDateTime::now_utc();
+        let snapshots = self.run_cycle_at(now).await;
+        self.schedule_from_snapshots(&snapshots);
+        self.send_startup_summary(&snapshots, now).await;
 
         let interval_secs = self.config.poll_interval_secs;
 
         loop {
-            // Sleep until the next clock-aligned boundary so polls
-            // land on consistent times (e.g. every 10 min at :00/:10/:20).
             let now = OffsetDateTime::now_utc();
+
+            // Fire any scheduled notifications that are already overdue.
+            self.fire_due_scheduled(now).await;
+
+            // Compute time to next clock-aligned poll boundary.
             let secs_today =
                 now.hour() as u64 * 3600 + now.minute() as u64 * 60 + now.second() as u64;
             let elapsed = secs_today % interval_secs;
-            let delay = Duration::from_secs(interval_secs - elapsed);
+            let poll_delay = Duration::from_secs(interval_secs - elapsed);
+
+            // Check if a scheduled notification is due before the next poll.
+            let scheduled_delay = self.next_scheduled_delay(now);
+
+            // Sleep until the soonest event.
+            let delay = scheduled_delay.unwrap_or(poll_delay).min(poll_delay);
 
             tokio::select! {
                 _ = sleep(delay) => {
-                    self.run_cycle_at(OffsetDateTime::now_utc()).await;
+                    let now = OffsetDateTime::now_utc();
+                    self.fire_due_scheduled(now).await;
+
+                    // Poll if the full poll timer expired (not an early scheduled wake).
+                    if delay == poll_delay {
+                        let snapshots = self.run_cycle_at(now).await;
+                        self.schedule_from_snapshots(&snapshots);
+                    }
                 }
                 _ = tokio::signal::ctrl_c() => {
                     info!("shutdown signal received");
                     return Ok(());
                 }
+            }
+        }
+    }
+
+    /// Replace pending scheduled entries with fresh ones from the latest snapshots.
+    fn schedule_from_snapshots(&mut self, snapshots: &[QuotaSnapshot]) {
+        let now = OffsetDateTime::now_utc();
+        // Clear out done entries so we don't accumulate stale ones.
+        self.scheduled.retain(|s| !s.done);
+        for s in snapshots {
+            if s.reset_at <= now {
+                continue;
+            }
+            // Replace any existing pending entry for this (provider, window_kind).
+            self.scheduled
+                .retain(|p| !(p.provider == s.provider && p.window_kind == s.window_kind));
+            self.scheduled.push(ScheduledReset {
+                provider: s.provider,
+                window_kind: s.window_kind,
+                reset_at: s.reset_at,
+                usage: s.usage,
+                limit: s.limit,
+                done: false,
+            });
+        }
+    }
+
+    /// Return the shortest `Duration` until a pending scheduled notification fires.
+    /// Returns `None` when no pending notifications exist.
+    fn next_scheduled_delay(&self, now: OffsetDateTime) -> Option<Duration> {
+        self.scheduled
+            .iter()
+            .filter(|s| !s.done)
+            .filter_map(|s| {
+                let dur = s.reset_at - now;
+                if dur.is_negative() {
+                    Some(Duration::ZERO)
+                } else {
+                    Some(Duration::from_secs(dur.whole_seconds().max(0) as u64))
+                }
+            })
+            .min()
+    }
+
+    /// Fire all scheduled notifications whose `reset_at` is at or before `now`.
+    async fn fire_due_scheduled(&mut self, now: OffsetDateTime) {
+        for s in &mut self.scheduled {
+            if s.done {
+                continue;
+            }
+            if s.reset_at > now {
+                continue;
+            }
+            s.done = true;
+            self.scheduled_fired.insert((s.provider, s.window_kind));
+            let event = ResetEvent {
+                provider: s.provider,
+                window_kind: s.window_kind,
+                reset_at: s.reset_at,
+                usage: s.usage,
+                limit: s.limit,
+            };
+            info!(
+                provider = event.provider.as_str(),
+                window = event.window_kind.as_str(),
+                "scheduled reset notification"
+            );
+            if let Err(e) = self.notifier.notify_reset(&event).await {
+                warn!(error = %e, "failed to send scheduled reset notification");
             }
         }
     }

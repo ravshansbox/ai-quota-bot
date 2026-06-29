@@ -288,7 +288,7 @@ async fn second_cycle_after_reset_sends_one_notification() {
 
     assert_eq!(
         notifier.messages(),
-        vec!["Claude 5h remaining: 0m".to_string()]
+        vec!["📊 Quota summary\nClaude: 5h 0% used (0m)".to_string()]
     );
 }
 
@@ -332,7 +332,7 @@ async fn non_auth_provider_failure_leaves_other_path_runnable() {
 
     assert_eq!(
         notifier.messages(),
-        vec!["Codex 7d remaining: 0m".to_string()]
+        vec!["📊 Quota summary\nCodex: 7d 5% used (0m)".to_string()]
     );
     assert_eq!(claude.fetch_tokens(), vec!["claude-token", "claude-token"]);
 }
@@ -401,6 +401,60 @@ async fn auth_file_reload_picks_up_changed_credentials_on_next_cycle() {
 
     assert_eq!(claude.fetch_tokens(), vec!["claude-old", "claude-new"]);
     assert_eq!(codex.fetch_tokens(), vec!["codex-old", "codex-new"]);
+}
+
+#[tokio::test]
+async fn scheduled_fired_flag_suppresses_detector_notification() {
+    let (_dir, auth_path) = temp_auth_file();
+    write_auth_file(&auth_path, "claude-token", "codex-token");
+
+    let notifier = FakeNotifier::default();
+    let claude = FakeProvider::new(
+        ProviderKind::Claude,
+        vec![
+            Ok(vec![claude_snapshot(
+                datetime!(2026-06-29 12:00 UTC),
+                "window-a",
+                42,
+            )]),
+            Ok(vec![claude_snapshot(
+                datetime!(2026-06-29 17:00 UTC),
+                "window-b",
+                0,
+            )]),
+        ],
+    );
+    let codex = FakeProvider::new(
+        ProviderKind::Codex,
+        vec![
+            Ok(vec![codex_snapshot(
+                datetime!(2026-06-30 00:00 UTC),
+                "window-a",
+                10,
+            )]),
+            Ok(vec![codex_snapshot(
+                datetime!(2026-06-30 00:00 UTC),
+                "window-a",
+                10,
+            )]),
+        ],
+    );
+    let mut daemon = Daemon::new(app_config(auth_path), notifier.clone(), claude, codex);
+
+    daemon.run_cycle_at(datetime!(2026-06-29 12:00 UTC)).await;
+
+    // Simulate that the scheduler already fired a notification for this window.
+    daemon
+        .scheduled_fired
+        .insert((ProviderKind::Claude, WindowKind::FiveHours));
+
+    daemon.run_cycle_at(datetime!(2026-06-29 17:00 UTC)).await;
+
+    // The detector normally would fire here, but it's suppressed.
+    assert!(
+        notifier.messages().is_empty(),
+        "expected no notifications when scheduled_fired suppresses detector"
+    );
 }
 
 #[tokio::test]
