@@ -283,7 +283,7 @@ async fn second_cycle_after_reset_sends_one_notification() {
 
     assert_eq!(
         notifier.messages(),
-        vec!["Claude Max 5h quota reset at 17:00 UTC".to_string()]
+        vec!["Claude 5h quota reset at 17:00 UTC".to_string()]
     );
 }
 
@@ -325,7 +325,7 @@ async fn non_auth_provider_failure_leaves_other_path_runnable() {
 
     assert_eq!(
         notifier.messages(),
-        vec!["Codex Pro 7d quota reset at 00:00 UTC".to_string()]
+        vec!["Codex 7d quota reset at 00:00 UTC".to_string()]
     );
     assert_eq!(claude.fetch_tokens(), vec!["claude-token", "claude-token"]);
 }

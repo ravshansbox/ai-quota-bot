@@ -112,7 +112,6 @@ where
                 continue;
             }
 
-            let plan = &windows[0].plan;
             let mut parts: Vec<String> = Vec::new();
 
             // Ensure 5h comes before 7d for consistent ordering.
@@ -131,7 +130,7 @@ where
                 }
             }
 
-            lines.push(format!("{} {}: {}", provider_name, plan, parts.join(", ")));
+            lines.push(format!("{}: {}", provider_name, parts.join(", ")));
         }
 
         let summary = format!("📊 Quota summary\n{}", lines.join("\n"));
