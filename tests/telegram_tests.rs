@@ -1,6 +1,6 @@
 use ai_quota_bot::{
     model::{ProviderKind, ResetEvent, WindowKind},
-    telegram::{format_reset_message, TelegramClient},
+    telegram::{TelegramClient, format_reset_message},
 };
 use httpmock::{Method::POST, MockServer};
 use reqwest::Client;

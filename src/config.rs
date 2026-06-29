@@ -12,10 +12,10 @@ pub struct AppConfig {
 
 impl AppConfig {
     pub fn from_env() -> AppResult<Self> {
-        let telegram_bot_token = env::var("TELEGRAM_BOT_TOKEN")
-            .map_err(|_| anyhow!("missing TELEGRAM_BOT_TOKEN"))?;
-        let telegram_chat_id = env::var("TELEGRAM_CHAT_ID")
-            .map_err(|_| anyhow!("missing TELEGRAM_CHAT_ID"))?;
+        let telegram_bot_token =
+            env::var("TELEGRAM_BOT_TOKEN").map_err(|_| anyhow!("missing TELEGRAM_BOT_TOKEN"))?;
+        let telegram_chat_id =
+            env::var("TELEGRAM_CHAT_ID").map_err(|_| anyhow!("missing TELEGRAM_CHAT_ID"))?;
 
         let auth_path = env::var("AI_QUOTA_AUTH_PATH")
             .map(PathBuf::from)
@@ -27,7 +27,10 @@ impl AppConfig {
 
         let poll_interval_secs = env::var("AI_QUOTA_POLL_INTERVAL_SECS")
             .ok()
-            .map(|raw| raw.parse::<u64>().context("invalid AI_QUOTA_POLL_INTERVAL_SECS"))
+            .map(|raw| {
+                raw.parse::<u64>()
+                    .context("invalid AI_QUOTA_POLL_INTERVAL_SECS")
+            })
             .transpose()?
             .unwrap_or(600);
 

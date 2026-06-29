@@ -1,4 +1,7 @@
-use ai_quota_bot::{detector::ResetDetector, model::{ProviderKind, QuotaSnapshot, WindowKind}};
+use ai_quota_bot::{
+    detector::ResetDetector,
+    model::{ProviderKind, QuotaSnapshot, WindowKind},
+};
 use time::macros::datetime;
 
 fn snapshot(reset_at: time::OffsetDateTime, window_id: &str) -> QuotaSnapshot {

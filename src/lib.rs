@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod auth_refresh;
 pub mod config;
+pub mod daemon;
 pub mod detector;
 pub mod error;
 pub mod model;

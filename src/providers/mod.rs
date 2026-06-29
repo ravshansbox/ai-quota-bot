@@ -24,5 +24,8 @@ pub trait QuotaProvider: Send + Sync {
         creds: &ProviderCredentials,
     ) -> Result<Vec<QuotaSnapshot>, ProviderRequestError>;
 
-    async fn refresh_credentials(&self, creds: &ProviderCredentials) -> AppResult<ProviderCredentials>;
+    async fn refresh_credentials(
+        &self,
+        creds: &ProviderCredentials,
+    ) -> AppResult<ProviderCredentials>;
 }

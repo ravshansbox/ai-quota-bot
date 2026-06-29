@@ -11,7 +11,9 @@ fn env_lock() -> &'static Mutex<()> {
 }
 
 fn lock_env() -> std::sync::MutexGuard<'static, ()> {
-    env_lock().lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    env_lock()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 struct EnvGuard {
@@ -20,10 +22,7 @@ struct EnvGuard {
 
 impl EnvGuard {
     fn capture(vars: &[&'static str]) -> Self {
-        let saved = vars
-            .iter()
-            .map(|var| (*var, env::var(var).ok()))
-            .collect();
+        let saved = vars.iter().map(|var| (*var, env::var(var).ok())).collect();
 
         Self { saved }
     }
@@ -63,7 +62,11 @@ fn config_uses_defaults_when_optional_values_missing() {
     let config = AppConfig::from_env().unwrap();
     assert_eq!(config.telegram_chat_id, "1234");
     assert_eq!(config.poll_interval_secs, 600);
-    assert!(config.auth_path.ends_with(PathBuf::from(".pi/agent/auth.json")));
+    assert!(
+        config
+            .auth_path
+            .ends_with(PathBuf::from(".pi/agent/auth.json"))
+    );
 }
 
 #[test]
