@@ -9,7 +9,7 @@ use crate::{
     telegram::ResetNotifier,
 };
 use std::time::Duration;
-use time::OffsetDateTime;
+use time::{OffsetDateTime, macros::format_description};
 use tokio::time::sleep;
 use tracing::{info, warn};
 
@@ -95,21 +95,46 @@ where
             return;
         }
 
-        // Group snapshots by provider and format a concise summary line per window.
-        let mut tokens: Vec<String> = Vec::new();
+        // Group snapshots by provider so we can emit one line per provider.
+        let mut claude_windows: Vec<&QuotaSnapshot> = Vec::new();
+        let mut codex_windows: Vec<&QuotaSnapshot> = Vec::new();
+
         for s in snapshots {
-            let window_label = match s.window_kind {
-                WindowKind::FiveHours => "5h",
-                WindowKind::SevenDays => "7d",
-            };
-            let pct = match (s.usage, s.limit) {
-                (Some(u), Some(l)) if l > 0 => format!("{}%", u * 100 / l),
-                _ => "?".to_string(),
-            };
-            tokens.push(format!("{}: {} {}", s.plan, window_label, pct));
+            match s.provider {
+                ProviderKind::Claude => claude_windows.push(s),
+                ProviderKind::Codex => codex_windows.push(s),
+            }
         }
 
-        let summary = format!("📊 Quota summary\n{}", tokens.join("\n"));
+        let mut lines: Vec<String> = Vec::new();
+        for (provider_name, windows) in [("Claude", &claude_windows), ("Codex", &codex_windows)] {
+            if windows.is_empty() {
+                continue;
+            }
+
+            let plan = &windows[0].plan;
+            let mut parts: Vec<String> = Vec::new();
+
+            // Ensure 5h comes before 7d for consistent ordering.
+            for window_kind in [WindowKind::FiveHours, WindowKind::SevenDays] {
+                if let Some(s) = windows.iter().find(|w| w.window_kind == window_kind) {
+                    let label = match s.window_kind {
+                        WindowKind::FiveHours => "5h",
+                        WindowKind::SevenDays => "7d",
+                    };
+                    let pct = match (s.usage, s.limit) {
+                        (Some(u), Some(l)) if l > 0 => format!("{}%", u * 100 / l),
+                        _ => "?".to_string(),
+                    };
+                    let reset = format_reset_time(s.window_kind, s.reset_at);
+                    parts.push(format!("{} {} ({})", label, pct, reset));
+                }
+            }
+
+            lines.push(format!("{} {}: {}", provider_name, plan, parts.join(", ")));
+        }
+
+        let summary = format!("📊 Quota summary\n{}", lines.join("\n"));
         if let Err(e) = self.notifier.notify_text(&summary).await {
             warn!(error = %e, "failed to send startup summary");
         }
@@ -138,5 +163,18 @@ where
                 warn!(provider = provider.kind().as_str(), error = %error, "provider poll failed")
             }
         }
+    }
+}
+
+fn format_reset_time(window_kind: WindowKind, reset_at: OffsetDateTime) -> String {
+    match window_kind {
+        // 5h windows reset within hours — show the time.
+        WindowKind::FiveHours => reset_at
+            .format(&format_description!("[hour]:[minute] UTC"))
+            .unwrap_or_else(|_| "?".to_string()),
+        // 7d windows reset days out — show the short date.
+        WindowKind::SevenDays => reset_at
+            .format(&format_description!("[month repr:short] [day]"))
+            .unwrap_or_else(|_| "?".to_string()),
     }
 }
