@@ -4,6 +4,9 @@ use crate::{
 };
 use async_trait::async_trait;
 
+pub mod claude;
+pub mod codex;
+
 #[derive(Debug, thiserror::Error)]
 pub enum ProviderRequestError {
     #[error("authentication failed")]
