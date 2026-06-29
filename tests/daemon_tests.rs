@@ -292,7 +292,7 @@ async fn second_cycle_after_reset_sends_one_notification() {
 
     assert_eq!(
         notifier.messages(),
-        vec!["Claude 5h remaining: 0m".to_string()]
+        vec!["Claude 5h remaining: 0 m".to_string()]
     );
 }
 
@@ -336,7 +336,7 @@ async fn non_auth_provider_failure_leaves_other_path_runnable() {
 
     assert_eq!(
         notifier.messages(),
-        vec!["Codex 7d remaining: 0m".to_string()]
+        vec!["Codex 7d remaining: 0 m".to_string()]
     );
     assert_eq!(claude.fetch_tokens(), vec!["claude-token", "claude-token"]);
 }
