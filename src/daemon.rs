@@ -183,11 +183,11 @@ fn format_remaining(
             let hours = total_minutes / 60;
             let minutes = total_minutes % 60;
             if hours > 0 && minutes > 0 {
-                format!("{} h {}", hours, minutes)
+                format!("{}h {}m", hours, minutes)
             } else if hours > 0 {
-                format!("{} h", hours)
+                format!("{}h", hours)
             } else {
-                format!("{} m", minutes)
+                format!("{}m", minutes)
             }
         }
         WindowKind::SevenDays => {
@@ -195,11 +195,11 @@ fn format_remaining(
             let days = total_hours / 24;
             let hours = total_hours % 24;
             if days > 0 && hours > 0 {
-                format!("{} d {}", days, hours)
+                format!("{}d {}h", days, hours)
             } else if days > 0 {
-                format!("{} d", days)
+                format!("{}d", days)
             } else {
-                format!("{} h", hours)
+                format!("{}h", hours)
             }
         }
     }

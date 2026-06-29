@@ -95,7 +95,7 @@ pub fn format_reset_message(event: &ResetEvent, now: OffsetDateTime) -> String {
         event.reset_at - now
     } else {
         return format!(
-            "{} {} remaining: 0 m",
+            "{} {} remaining: 0m",
             display_provider(event.provider),
             display_window(event.window_kind),
         );
@@ -107,11 +107,11 @@ pub fn format_reset_message(event: &ResetEvent, now: OffsetDateTime) -> String {
             let hours = total_minutes / 60;
             let minutes = total_minutes % 60;
             if hours > 0 && minutes > 0 {
-                format!("{} h {} m", hours, minutes)
+                format!("{}h {}m", hours, minutes)
             } else if hours > 0 {
-                format!("{} h", hours)
+                format!("{}h", hours)
             } else {
-                format!("{} m", minutes)
+                format!("{}m", minutes)
             }
         }
         WindowKind::SevenDays => {
@@ -119,11 +119,11 @@ pub fn format_reset_message(event: &ResetEvent, now: OffsetDateTime) -> String {
             let days = total_hours / 24;
             let hours = total_hours % 24;
             if days > 0 && hours > 0 {
-                format!("{} d {} h", days, hours)
+                format!("{}d {}h", days, hours)
             } else if days > 0 {
-                format!("{} d", days)
+                format!("{}d", days)
             } else {
-                format!("{} h", hours)
+                format!("{}h", hours)
             }
         }
     };
