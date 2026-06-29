@@ -34,6 +34,8 @@ impl CodexProvider {
 struct CodexUsageResponse {
     #[serde(rename = "rate_limit", alias = "rate_limits")]
     rate_limit: Option<RateLimit>,
+    #[serde(rename = "plan_type")]
+    plan_type: Option<String>,
     #[allow(dead_code)]
     credits: Option<Credits>,
     #[serde(rename = "spend_control")]
@@ -131,6 +133,7 @@ impl QuotaProvider for CodexProvider {
             .map_err(|err| ProviderRequestError::Other(err.into()))?;
 
         let mut snapshots = Vec::new();
+        let plan_name = payload.plan_type.as_deref().unwrap_or("pro");
 
         // Try to extract the 5h primary window
         let five_hour = payload
@@ -155,7 +158,7 @@ impl QuotaProvider for CodexProvider {
 
             snapshots.push(QuotaSnapshot {
                 provider: ProviderKind::Codex,
-                plan: "pro".into(),
+                plan: plan_name.to_string(),
                 window_kind: WindowKind::FiveHours,
                 window_id: Some(format!("5h-{}", reset_at.unix_timestamp())),
                 reset_at,
@@ -180,7 +183,7 @@ impl QuotaProvider for CodexProvider {
 
             snapshots.push(QuotaSnapshot {
                 provider: ProviderKind::Codex,
-                plan: "pro".into(),
+                plan: plan_name.to_string(),
                 window_kind: WindowKind::SevenDays,
                 window_id: Some(format!("7d-{}", reset_at.unix_timestamp())),
                 reset_at,
