@@ -47,6 +47,8 @@ impl ResetDetector {
                         provider: snapshot.provider,
                         window_kind: snapshot.window_kind,
                         reset_at: snapshot.reset_at,
+                        usage: snapshot.usage,
+                        limit: snapshot.limit,
                     });
                 }
             }

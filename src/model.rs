@@ -53,6 +53,8 @@ pub struct ResetEvent {
     pub provider: ProviderKind,
     pub window_kind: WindowKind,
     pub reset_at: OffsetDateTime,
+    pub usage: Option<u64>,
+    pub limit: Option<u64>,
 }
 
 /// Format remaining time as "3h", "1h 28m", "6d 15h", "0m".

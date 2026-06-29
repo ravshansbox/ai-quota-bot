@@ -91,12 +91,19 @@ struct SendMessageBody {
 }
 
 pub fn format_reset_message(event: &ResetEvent, now: OffsetDateTime) -> String {
+    let provider_name = display_provider(event.provider);
+    let label = match event.window_kind {
+        WindowKind::FiveHours => "5h",
+        WindowKind::SevenDays => "7d",
+    };
+    let pct = match (event.usage, event.limit) {
+        (Some(u), Some(l)) if l > 0 => format!("{}% used", u * 100 / l),
+        _ => "?".to_string(),
+    };
     let remaining = format_remaining(event.window_kind, event.reset_at, now);
     format!(
-        "{} {} remaining: {}",
-        display_provider(event.provider),
-        display_window(event.window_kind),
-        remaining,
+        "📊 Quota summary\n{}: {} {} ({})",
+        provider_name, label, pct, remaining,
     )
 }
 
@@ -104,12 +111,5 @@ fn display_provider(provider: ProviderKind) -> &'static str {
     match provider {
         ProviderKind::Claude => "Claude",
         ProviderKind::Codex => "Codex",
-    }
-}
-
-fn display_window(window: WindowKind) -> &'static str {
-    match window {
-        WindowKind::FiveHours => "5h",
-        WindowKind::SevenDays => "7d",
     }
 }
