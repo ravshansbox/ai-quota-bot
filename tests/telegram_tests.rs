@@ -13,14 +13,9 @@ fn local_offset() -> UtcOffset {
 
 fn format_local_time(utc: OffsetDateTime) -> String {
     let local = utc.to_offset(local_offset());
-    let offset_str = format!("{}", local_offset());
-    format!(
-        "{} {}",
-        local
-            .format(&time::macros::format_description!("[hour]:[minute]"))
-            .unwrap_or_else(|_| "?".to_string()),
-        offset_str,
-    )
+    local
+        .format(&time::macros::format_description!("[hour]:[minute]"))
+        .unwrap_or_else(|_| "?".to_string())
 }
 
 fn event() -> ResetEvent {
