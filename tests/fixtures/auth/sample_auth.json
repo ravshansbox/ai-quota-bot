@@ -1,0 +1,12 @@
+{
+  "claude": {
+    "access_token": "claude-access",
+    "refresh_token": "claude-refresh",
+    "expires_at": "2026-06-29T14:00:00Z"
+  },
+  "codex": {
+    "access_token": "codex-access",
+    "refresh_token": "codex-refresh",
+    "expires_at": "2026-06-29T14:30:00Z"
+  }
+}
