@@ -56,6 +56,12 @@ where
     }
 
     pub async fn run_forever(&mut self) -> AppResult<()> {
+        // Run the first cycle immediately on startup instead of
+        // waiting for the first interval tick.
+        if let Err(error) = self.run_cycle().await {
+            warn!(error = %error, "initial poll cycle failed");
+        }
+
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(
             self.config.poll_interval_secs,
         ));
