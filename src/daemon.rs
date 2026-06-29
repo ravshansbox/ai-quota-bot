@@ -8,7 +8,9 @@ use crate::{
     providers::QuotaProvider,
     telegram::ResetNotifier,
 };
+use std::time::Duration;
 use time::OffsetDateTime;
+use tokio::time::sleep;
 use tracing::{info, warn};
 
 pub struct Daemon<P1, P2, N> {
@@ -62,13 +64,19 @@ where
             warn!(error = %error, "initial poll cycle failed");
         }
 
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(
-            self.config.poll_interval_secs,
-        ));
+        let interval_secs = self.config.poll_interval_secs;
 
         loop {
+            // Sleep until the next clock-aligned boundary so polls
+            // land on consistent times (e.g. every 10 min at :00/:10/:20).
+            let now = OffsetDateTime::now_utc();
+            let secs_today =
+                now.hour() as u64 * 3600 + now.minute() as u64 * 60 + now.second() as u64;
+            let elapsed = secs_today % interval_secs;
+            let delay = Duration::from_secs(interval_secs - elapsed);
+
             tokio::select! {
-                _ = interval.tick() => {
+                _ = sleep(delay) => {
                     if let Err(error) = self.run_cycle().await {
                         warn!(error = %error, "poll cycle failed");
                     }
