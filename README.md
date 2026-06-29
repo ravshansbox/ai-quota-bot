@@ -14,7 +14,7 @@ Optional environment variables:
 - `AI_QUOTA_AUTH_PATH` override for the auth file path. Default: `$HOME/.pi/agent/auth.json`
 - `AI_QUOTA_POLL_INTERVAL_SECS` poll interval in seconds. Default: `600`
 - `AI_QUOTA_CLAUDE_BASE_URL` Claude API base URL override. Default: `https://api.anthropic.com`
-- `AI_QUOTA_CODEX_BASE_URL` Codex API base URL override. Default: `https://api.openai.com`
+- `AI_QUOTA_CODEX_BASE_URL` Codex API base URL override. Default: `https://chatgpt.com`
 
 ## Auth file
 
@@ -51,5 +51,7 @@ cargo build --release
 
 ## Current implementation notes
 
-- provider adapters currently use `/usage` requests against the configured provider base URLs
+- provider adapters query the real Pi provider API endpoints:
+  - Claude: `https://api.anthropic.com/api/oauth/usage`
+  - Codex: `https://chatgpt.com/backend-api/wham/usage`
 - if the real provider payloads differ, update the adapter parsing while keeping the common quota model stable
