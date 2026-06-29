@@ -1,16 +1,22 @@
 mod support;
 
 use ai_quota_bot::{
-    model::{ProviderCredentials, ProviderKind, WindowKind},
+    config::AppConfig,
+    daemon::Daemon,
+    model::{ProviderCredentials, ProviderKind, QuotaSnapshot, ResetEvent, WindowKind},
     providers::{
-        claude::ClaudeProvider,
-        codex::CodexProvider,
-        ProviderRequestError,
-        QuotaProvider,
+        ProviderRequestError, QuotaProvider, claude::ClaudeProvider, codex::CodexProvider,
     },
+    telegram::ResetNotifier,
 };
+use anyhow::Result;
+use async_trait::async_trait;
 use httpmock::{Method::GET, MockServer};
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 fn credentials() -> ProviderCredentials {
     ProviderCredentials {
@@ -22,10 +28,72 @@ fn credentials() -> ProviderCredentials {
     }
 }
 
+#[derive(Clone, Default)]
+struct FakeNotifier {
+    sent: Arc<Mutex<Vec<ResetEvent>>>,
+}
+
+#[async_trait]
+impl ResetNotifier for FakeNotifier {
+    async fn notify_reset(&self, event: &ResetEvent) -> Result<()> {
+        self.sent.lock().unwrap().push(event.clone());
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+struct FakeProvider {
+    provider: ProviderKind,
+}
+
+#[async_trait]
+impl QuotaProvider for FakeProvider {
+    fn kind(&self) -> ProviderKind {
+        self.provider
+    }
+
+    async fn fetch_snapshots(
+        &self,
+        _creds: &ProviderCredentials,
+    ) -> Result<Vec<QuotaSnapshot>, ProviderRequestError> {
+        Ok(Vec::new())
+    }
+
+    async fn refresh_credentials(
+        &self,
+        creds: &ProviderCredentials,
+    ) -> Result<ProviderCredentials> {
+        Ok(creds.clone())
+    }
+}
+
 #[test]
 fn provider_window_kinds_cover_supported_reset_windows() {
     assert_eq!(ProviderKind::Claude.as_str(), "claude");
     assert_eq!(WindowKind::SevenDays.as_str(), "7d");
+}
+
+#[test]
+fn detector_can_be_embedded_in_daemon_state() {
+    let config = AppConfig {
+        telegram_bot_token: "bot-token".into(),
+        telegram_chat_id: "1234".into(),
+        auth_path: PathBuf::from("/tmp/auth.json"),
+        poll_interval_secs: 600,
+    };
+
+    let mut daemon = Daemon::new(
+        config,
+        FakeNotifier::default(),
+        FakeProvider {
+            provider: ProviderKind::Claude,
+        },
+        FakeProvider {
+            provider: ProviderKind::Codex,
+        },
+    );
+
+    assert!(daemon.detector.detect(Vec::new()).is_empty());
 }
 
 #[tokio::test]

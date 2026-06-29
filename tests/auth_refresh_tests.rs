@@ -9,8 +9,8 @@ use std::{
     collections::{HashMap, VecDeque},
     sync::{Arc, Mutex},
 };
-use time::{Duration, OffsetDateTime};
 use time::macros::datetime;
+use time::{Duration, OffsetDateTime};
 
 fn credentials(expires_at: Option<OffsetDateTime>) -> ProviderCredentials {
     ProviderCredentials {
@@ -148,13 +148,10 @@ async fn fetch_with_refresh_uses_existing_credentials_when_token_is_fresh() {
     let provider = MockProvider::new(vec![Ok(vec![snapshot()])]);
     let creds = credentials(Some(datetime!(2026-06-29 12:30 UTC)));
 
-    let (returned_creds, snapshots) = fetch_with_refresh(
-        &provider,
-        &creds,
-        datetime!(2026-06-29 12:00 UTC),
-    )
-    .await
-    .unwrap();
+    let (returned_creds, snapshots) =
+        fetch_with_refresh(&provider, &creds, datetime!(2026-06-29 12:00 UTC))
+            .await
+            .unwrap();
 
     assert_eq!(returned_creds, creds);
     assert_eq!(snapshots, vec![snapshot()]);
@@ -171,16 +168,14 @@ async fn fetch_with_refresh_refreshes_before_fetch_when_expiry_is_near() {
         account_id: None,
         raw_source: HashMap::new(),
     };
-    let provider = MockProvider::new(vec![Ok(vec![snapshot()])]).with_refreshed_credentials(refreshed.clone());
+    let provider =
+        MockProvider::new(vec![Ok(vec![snapshot()])]).with_refreshed_credentials(refreshed.clone());
     let creds = credentials(Some(datetime!(2026-06-29 12:04 UTC)));
 
-    let (returned_creds, snapshots) = fetch_with_refresh(
-        &provider,
-        &creds,
-        datetime!(2026-06-29 12:00 UTC),
-    )
-    .await
-    .unwrap();
+    let (returned_creds, snapshots) =
+        fetch_with_refresh(&provider, &creds, datetime!(2026-06-29 12:00 UTC))
+            .await
+            .unwrap();
 
     assert_eq!(returned_creds, refreshed);
     assert_eq!(snapshots, vec![snapshot()]);
@@ -204,18 +199,18 @@ async fn fetch_with_refresh_retries_after_authentication_failure() {
     .with_refreshed_credentials(refreshed.clone());
     let creds = credentials(Some(datetime!(2026-06-29 12:30 UTC)));
 
-    let (returned_creds, snapshots) = fetch_with_refresh(
-        &provider,
-        &creds,
-        datetime!(2026-06-29 12:00 UTC),
-    )
-    .await
-    .unwrap();
+    let (returned_creds, snapshots) =
+        fetch_with_refresh(&provider, &creds, datetime!(2026-06-29 12:00 UTC))
+            .await
+            .unwrap();
 
     assert_eq!(returned_creds, refreshed);
     assert_eq!(snapshots, vec![snapshot()]);
     assert_eq!(provider.refresh_tokens(), vec!["token".to_string()]);
-    assert_eq!(provider.fetch_tokens(), vec!["token".to_string(), "token-refreshed".to_string()]);
+    assert_eq!(
+        provider.fetch_tokens(),
+        vec!["token".to_string(), "token-refreshed".to_string()]
+    );
 }
 
 #[tokio::test]
@@ -223,13 +218,9 @@ async fn fetch_with_refresh_returns_refresh_error() {
     let provider = MockProvider::new(vec![]).with_refresh_error("refresh failed");
     let creds = credentials(Some(datetime!(2026-06-29 12:04 UTC)));
 
-    let error = fetch_with_refresh(
-        &provider,
-        &creds,
-        datetime!(2026-06-29 12:00 UTC),
-    )
-    .await
-    .unwrap_err();
+    let error = fetch_with_refresh(&provider, &creds, datetime!(2026-06-29 12:00 UTC))
+        .await
+        .unwrap_err();
 
     assert!(error.to_string().contains("refresh failed"));
 }
@@ -239,13 +230,9 @@ async fn fetch_with_refresh_returns_non_auth_fetch_error() {
     let provider = MockProvider::new(vec![Err(ProviderRequestError::Other(anyhow!("boom")))]);
     let creds = credentials(Some(datetime!(2026-06-29 12:30 UTC)));
 
-    let error = fetch_with_refresh(
-        &provider,
-        &creds,
-        datetime!(2026-06-29 12:00 UTC),
-    )
-    .await
-    .unwrap_err();
+    let error = fetch_with_refresh(&provider, &creds, datetime!(2026-06-29 12:00 UTC))
+        .await
+        .unwrap_err();
 
     assert!(error.to_string().contains("boom"));
     assert_eq!(provider.refresh_tokens(), Vec::<String>::new());

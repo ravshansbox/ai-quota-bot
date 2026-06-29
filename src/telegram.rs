@@ -2,9 +2,15 @@ use crate::{
     error::AppResult,
     model::{ProviderKind, ResetEvent, WindowKind},
 };
+use async_trait::async_trait;
 use reqwest::Client;
 use serde::Serialize;
 use time::macros::format_description;
+
+#[async_trait]
+pub trait ResetNotifier: Send + Sync {
+    async fn notify_reset(&self, event: &ResetEvent) -> AppResult<()>;
+}
 
 #[derive(Clone, Debug)]
 pub struct TelegramClient {
@@ -14,9 +20,21 @@ pub struct TelegramClient {
     api_base: String,
 }
 
+#[async_trait]
+impl ResetNotifier for TelegramClient {
+    async fn notify_reset(&self, event: &ResetEvent) -> AppResult<()> {
+        self.send_reset(event).await
+    }
+}
+
 impl TelegramClient {
     pub fn new(bot_token: String, chat_id: String) -> Self {
-        Self::with_api_base(Client::new(), bot_token, chat_id, "https://api.telegram.org")
+        Self::with_api_base(
+            Client::new(),
+            bot_token,
+            chat_id,
+            "https://api.telegram.org",
+        )
     }
 
     pub fn with_api_base(

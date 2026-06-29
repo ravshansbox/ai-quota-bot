@@ -3,11 +3,11 @@ use crate::{
     model::{ProviderCredentials, ProviderKind, QuotaSnapshot, WindowKind},
     providers::{ProviderRequestError, QuotaProvider},
 };
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use async_trait::async_trait;
 use reqwest::{Client, StatusCode};
 use serde::Deserialize;
-use time::{format_description::well_known::Rfc3339, OffsetDateTime};
+use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 #[derive(Clone, Debug)]
 pub struct ClaudeProvider {
@@ -67,8 +67,8 @@ impl QuotaProvider for ClaudeProvider {
             .json()
             .await
             .map_err(|err| ProviderRequestError::Other(err.into()))?;
-        let window_kind = parse_window_kind(&payload.window_kind)
-            .map_err(ProviderRequestError::Other)?;
+        let window_kind =
+            parse_window_kind(&payload.window_kind).map_err(ProviderRequestError::Other)?;
         let reset_at = OffsetDateTime::parse(&payload.reset_at, &Rfc3339)
             .context("failed to parse Claude reset_at as RFC3339")
             .map_err(ProviderRequestError::Other)?;
@@ -84,7 +84,10 @@ impl QuotaProvider for ClaudeProvider {
         }])
     }
 
-    async fn refresh_credentials(&self, creds: &ProviderCredentials) -> AppResult<ProviderCredentials> {
+    async fn refresh_credentials(
+        &self,
+        creds: &ProviderCredentials,
+    ) -> AppResult<ProviderCredentials> {
         Ok(creds.clone())
     }
 }
