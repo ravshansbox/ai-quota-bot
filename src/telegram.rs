@@ -5,7 +5,7 @@ use crate::{
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::Serialize;
-use time::{UtcOffset, macros::format_description};
+use time::OffsetDateTime;
 
 #[async_trait]
 pub trait ResetNotifier: Send + Sync {
@@ -62,7 +62,8 @@ impl TelegramClient {
     }
 
     pub async fn send_reset(&self, event: &ResetEvent) -> AppResult<()> {
-        self.send_text(&format_reset_message(event)).await
+        self.send_text(&format_reset_message(event, OffsetDateTime::now_utc()))
+            .await
     }
 
     async fn send_text(&self, text: &str) -> AppResult<()> {
@@ -89,20 +90,49 @@ struct SendMessageBody {
     text: String,
 }
 
-pub fn format_reset_message(event: &ResetEvent) -> String {
-    let local = UtcOffset::current_local_offset()
-        .map(|offset| event.reset_at.to_offset(offset))
-        .unwrap_or(event.reset_at);
+pub fn format_reset_message(event: &ResetEvent, now: OffsetDateTime) -> String {
+    let dur = if event.reset_at > now {
+        event.reset_at - now
+    } else {
+        return format!(
+            "{} {} remaining: 0m",
+            display_provider(event.provider),
+            display_window(event.window_kind),
+        );
+    };
 
-    let time_str = local
-        .format(&format_description!("[hour]:[minute]"))
-        .unwrap_or_else(|_| "?".to_string());
+    let remaining = match event.window_kind {
+        WindowKind::FiveHours => {
+            let total_minutes = dur.whole_minutes();
+            let hours = total_minutes / 60;
+            let minutes = total_minutes % 60;
+            if hours > 0 && minutes > 0 {
+                format!("{}h{}m", hours, minutes)
+            } else if hours > 0 {
+                format!("{}h", hours)
+            } else {
+                format!("{}m", minutes)
+            }
+        }
+        WindowKind::SevenDays => {
+            let total_hours = dur.whole_hours();
+            let days = total_hours / 24;
+            let hours = total_hours % 24;
+            if days > 0 && hours > 0 {
+                format!("{}d{}h", days, hours)
+            } else if days > 0 {
+                format!("{}d", days)
+            } else {
+                format!("{}h", hours)
+            }
+        }
+    };
 
     format!(
-        "{} {} quota reset at {}",
+        "{} {} remaining: {}",
         display_provider(event.provider),
         display_window(event.window_kind),
-        time_str,
+        remaining,
     )
 }
 

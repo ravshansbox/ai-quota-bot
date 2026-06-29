@@ -9,7 +9,7 @@ use crate::{
     telegram::ResetNotifier,
 };
 use std::time::Duration;
-use time::{OffsetDateTime, UtcOffset, macros::format_description};
+use time::OffsetDateTime;
 use tokio::time::sleep;
 use tracing::{info, warn};
 
@@ -65,7 +65,8 @@ where
     pub async fn run_forever(&mut self) -> AppResult<()> {
         // Run the first cycle immediately and send a startup summary.
         let snapshots = self.run_cycle_at(OffsetDateTime::now_utc()).await;
-        self.send_startup_summary(&snapshots).await;
+        self.send_startup_summary(&snapshots, OffsetDateTime::now_utc())
+            .await;
 
         let interval_secs = self.config.poll_interval_secs;
 
@@ -90,7 +91,7 @@ where
         }
     }
 
-    async fn send_startup_summary(&self, snapshots: &[QuotaSnapshot]) {
+    async fn send_startup_summary(&self, snapshots: &[QuotaSnapshot], now: OffsetDateTime) {
         if snapshots.is_empty() {
             return;
         }
@@ -125,8 +126,8 @@ where
                         (Some(u), Some(l)) if l > 0 => format!("{}% used", u * 100 / l),
                         _ => "?".to_string(),
                     };
-                    let reset = format_reset_time(s.window_kind, s.reset_at);
-                    parts.push(format!("{} {} ({})", label, pct, reset));
+                    let remaining = format_remaining(s.window_kind, s.reset_at, now);
+                    parts.push(format!("{} {} ({})", label, pct, remaining));
                 }
             }
 
@@ -165,19 +166,41 @@ where
     }
 }
 
-fn format_reset_time(window_kind: WindowKind, reset_at: OffsetDateTime) -> String {
-    let local = UtcOffset::current_local_offset()
-        .map(|offset| reset_at.to_offset(offset))
-        .unwrap_or(reset_at);
+fn format_remaining(
+    window_kind: WindowKind,
+    reset_at: OffsetDateTime,
+    now: OffsetDateTime,
+) -> String {
+    let dur = if reset_at > now {
+        reset_at - now
+    } else {
+        return "0m".to_string();
+    };
 
     match window_kind {
-        // 5h windows reset within hours — show the local time.
-        WindowKind::FiveHours => local
-            .format(&format_description!("[hour]:[minute]"))
-            .unwrap_or_else(|_| "?".to_string()),
-        // 7d windows reset days out — show the local short date.
-        WindowKind::SevenDays => local
-            .format(&format_description!("[month repr:short] [day]"))
-            .unwrap_or_else(|_| "?".to_string()),
+        WindowKind::FiveHours => {
+            let total_minutes = dur.whole_minutes();
+            let hours = total_minutes / 60;
+            let minutes = total_minutes % 60;
+            if hours > 0 && minutes > 0 {
+                format!("{}h{}m", hours, minutes)
+            } else if hours > 0 {
+                format!("{}h", hours)
+            } else {
+                format!("{}m", minutes)
+            }
+        }
+        WindowKind::SevenDays => {
+            let total_hours = dur.whole_hours();
+            let days = total_hours / 24;
+            let hours = total_hours % 24;
+            if days > 0 && hours > 0 {
+                format!("{}d{}h", days, hours)
+            } else if days > 0 {
+                format!("{}d", days)
+            } else {
+                format!("{}h", hours)
+            }
+        }
     }
 }
