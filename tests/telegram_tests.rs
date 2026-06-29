@@ -9,7 +9,6 @@ use time::macros::datetime;
 fn event() -> ResetEvent {
     ResetEvent {
         provider: ProviderKind::Claude,
-        plan: "max".into(),
         window_kind: WindowKind::FiveHours,
         reset_at: datetime!(2026-06-29 12:00 UTC),
     }
@@ -18,7 +17,6 @@ fn event() -> ResetEvent {
 fn codex_event() -> ResetEvent {
     ResetEvent {
         provider: ProviderKind::Codex,
-        plan: "pro".into(),
         window_kind: WindowKind::SevenDays,
         reset_at: datetime!(2026-07-07 00:00 UTC),
     }

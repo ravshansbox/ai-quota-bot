@@ -41,7 +41,6 @@ pub struct ProviderCredentials {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QuotaSnapshot {
     pub provider: ProviderKind,
-    pub plan: String,
     pub window_kind: WindowKind,
     pub window_id: Option<String>,
     pub reset_at: OffsetDateTime,
@@ -52,7 +51,6 @@ pub struct QuotaSnapshot {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResetEvent {
     pub provider: ProviderKind,
-    pub plan: String,
     pub window_kind: WindowKind,
     pub reset_at: OffsetDateTime,
 }

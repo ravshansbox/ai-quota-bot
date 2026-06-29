@@ -96,7 +96,6 @@ impl QuotaProvider for ClaudeProvider {
             let reset_at = parse_reset_at(entry.resets_at.as_deref())?;
             snapshots.push(QuotaSnapshot {
                 provider: ProviderKind::Claude,
-                plan: "max".into(),
                 window_kind: WindowKind::FiveHours,
                 window_id: Some("5h".into()),
                 reset_at,
@@ -109,7 +108,6 @@ impl QuotaProvider for ClaudeProvider {
             let reset_at = parse_reset_at(entry.resets_at.as_deref())?;
             snapshots.push(QuotaSnapshot {
                 provider: ProviderKind::Claude,
-                plan: "max".into(),
                 window_kind: WindowKind::SevenDays,
                 window_id: Some("7d".into()),
                 reset_at,
