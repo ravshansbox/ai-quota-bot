@@ -6,7 +6,7 @@ use ai_quota_bot::{
 use anyhow::anyhow;
 use async_trait::async_trait;
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::VecDeque,
     sync::{Arc, Mutex},
 };
 use time::macros::datetime;
@@ -18,7 +18,6 @@ fn credentials(expires_at: Option<OffsetDateTime>) -> ProviderCredentials {
         refresh_token: Some("refresh".into()),
         expires_at,
         account_id: None,
-        raw_source: HashMap::new(),
     }
 }
 
@@ -116,7 +115,6 @@ impl QuotaProvider for MockProvider {
                 refresh_token: creds.refresh_token.clone(),
                 expires_at: creds.expires_at,
                 account_id: creds.account_id.clone(),
-                raw_source: creds.raw_source.clone(),
             }))
     }
 }
@@ -177,7 +175,6 @@ async fn fetch_with_refresh_refreshes_before_fetch_when_expiry_is_near() {
         refresh_token: Some("refresh".into()),
         expires_at: Some(datetime!(2026-06-29 13:00 UTC)),
         account_id: None,
-        raw_source: HashMap::new(),
     };
     let provider =
         MockProvider::new(vec![Ok(vec![snapshot()])]).with_refreshed_credentials(refreshed.clone());
@@ -201,7 +198,6 @@ async fn fetch_with_refresh_retries_after_authentication_failure() {
         refresh_token: Some("refresh".into()),
         expires_at: Some(datetime!(2026-06-29 13:00 UTC)),
         account_id: None,
-        raw_source: HashMap::new(),
     };
     let provider = MockProvider::new(vec![
         Err(ProviderRequestError::Authentication),

@@ -12,8 +12,6 @@ fn event() -> ResetEvent {
         plan: "max".into(),
         window_kind: WindowKind::FiveHours,
         reset_at: datetime!(2026-06-29 12:00 UTC),
-        previous_window_id: None,
-        current_window_id: None,
     }
 }
 
@@ -23,8 +21,6 @@ fn codex_event() -> ResetEvent {
         plan: "pro".into(),
         window_kind: WindowKind::SevenDays,
         reset_at: datetime!(2026-07-07 00:00 UTC),
-        previous_window_id: None,
-        current_window_id: None,
     }
 }
 

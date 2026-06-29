@@ -13,7 +13,7 @@ use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use httpmock::{Method::GET, MockServer};
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::VecDeque,
     fs,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -28,7 +28,6 @@ fn credentials() -> ProviderCredentials {
         refresh_token: Some("refresh".into()),
         expires_at: None,
         account_id: None,
-        raw_source: HashMap::new(),
     }
 }
 
@@ -160,7 +159,6 @@ impl QuotaProvider for FakeProvider {
                 refresh_token: creds.refresh_token.clone(),
                 expires_at: creds.expires_at,
                 account_id: creds.account_id.clone(),
-                raw_source: creds.raw_source.clone(),
             }))
     }
 }
@@ -352,7 +350,6 @@ async fn auth_failure_triggers_refresh_credentials_once_and_then_succeeds() {
         refresh_token: Some("claude-refresh".into()),
         expires_at: None,
         account_id: Some("claude-account".into()),
-        raw_source: HashMap::new(),
     };
     let claude = FakeProvider::new(
         ProviderKind::Claude,
