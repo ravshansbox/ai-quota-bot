@@ -31,7 +31,7 @@ async fn main() -> anyhow::Result<()> {
     );
     let codex = CodexProvider::new(
         std::env::var("AI_QUOTA_CODEX_BASE_URL")
-            .unwrap_or_else(|_| "https://api.openai.com".to_string()),
+            .unwrap_or_else(|_| "https://chatgpt.com".to_string()),
     );
 
     let mut daemon = Daemon::new(config, notifier, claude, codex);
