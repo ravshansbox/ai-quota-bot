@@ -8,9 +8,16 @@ struct SnapshotKey {
     window_kind: WindowKind,
 }
 
+/// Cached usage value used to detect resets.
+#[derive(Debug, Clone)]
+struct CachedState {
+    used_pct: u64,
+    reset_at_ms: i128,
+}
+
 #[derive(Default)]
 pub struct ResetDetector {
-    previous: HashMap<SnapshotKey, QuotaSnapshot>,
+    previous: HashMap<SnapshotKey, CachedState>,
     initialized: bool,
 }
 
@@ -26,24 +33,36 @@ impl ResetDetector {
                 window_kind: snapshot.window_kind,
             };
 
+            let used_pct = snapshot.usage.unwrap_or(0);
+
             if self.initialized
-                && let Some(previous) = self.previous.get(&key)
+                && let Some(prev) = self.previous.get(&key)
             {
-                let reset_advanced = snapshot.reset_at > previous.reset_at;
-                let window_changed = snapshot.window_id != previous.window_id;
-                if reset_advanced || window_changed {
+                // A real reset means usage dropped significantly (the window
+                // refreshed back to a low used %). Small fluctuations within
+                // a few percent are just polling noise.
+                let dropped = prev.used_pct.saturating_sub(used_pct);
+                let timestamp_changed =
+                    snapshot.reset_at.unix_timestamp_nanos() != prev.reset_at_ms;
+                if dropped >= 5 && timestamp_changed {
                     events.push(ResetEvent {
                         provider: snapshot.provider,
                         plan: snapshot.plan.clone(),
                         window_kind: snapshot.window_kind,
                         reset_at: snapshot.reset_at,
-                        previous_window_id: previous.window_id.clone(),
-                        current_window_id: snapshot.window_id.clone(),
+                        previous_window_id: None,
+                        current_window_id: None,
                     });
                 }
             }
 
-            next.insert(key, snapshot);
+            next.insert(
+                key,
+                CachedState {
+                    used_pct,
+                    reset_at_ms: snapshot.reset_at.unix_timestamp_nanos(),
+                },
+            );
         }
 
         self.previous = next;
