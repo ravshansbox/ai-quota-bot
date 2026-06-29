@@ -32,7 +32,7 @@ impl CodexProvider {
 /// https://chatgpt.com/backend-api/wham/usage
 #[derive(Debug, Deserialize)]
 struct CodexUsageResponse {
-    #[serde(rename = "rate_limit")]
+    #[serde(rename = "rate_limit", alias = "rate_limits")]
     rate_limit: Option<RateLimit>,
     #[allow(dead_code)]
     credits: Option<Credits>,
@@ -43,12 +43,11 @@ struct CodexUsageResponse {
 
 #[derive(Debug, Deserialize)]
 struct RateLimit {
-    #[serde(rename = "primary_window")]
+    #[serde(rename = "primary_window", alias = "primary")]
     primary_window: Option<RateLimitWindow>,
-    #[serde(rename = "secondary_window")]
+    #[serde(rename = "secondary_window", alias = "secondary")]
     secondary_window: Option<RateLimitWindow>,
-    // Sometimes the 5h window is directly at the top level
-    #[serde(rename = "five_hour_limit")]
+    #[serde(rename = "five_hour_limit", alias = "five_hour")]
     five_hour_limit: Option<RateLimitWindow>,
 }
 
@@ -72,7 +71,7 @@ struct Credits {
     #[allow(dead_code)]
     has_credits: Option<bool>,
     #[allow(dead_code)]
-    balance: Option<f64>,
+    balance: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
