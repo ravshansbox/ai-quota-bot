@@ -28,11 +28,13 @@ async fn main() -> anyhow::Result<()> {
     let claude = ClaudeProvider::new(
         std::env::var("AI_QUOTA_CLAUDE_BASE_URL")
             .unwrap_or_else(|_| "https://api.anthropic.com".to_string()),
-    );
+    )
+    .with_auth_path(config.auth_path.clone());
     let codex = CodexProvider::new(
         std::env::var("AI_QUOTA_CODEX_BASE_URL")
             .unwrap_or_else(|_| "https://chatgpt.com".to_string()),
-    );
+    )
+    .with_auth_path(config.auth_path.clone());
 
     let mut daemon = Daemon::new(config, notifier, claude, codex);
     daemon.run_forever().await

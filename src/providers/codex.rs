@@ -1,18 +1,21 @@
 use crate::{
+    auth,
     error::AppResult,
     model::{ProviderCredentials, ProviderKind, QuotaSnapshot, WindowKind},
     providers::{ProviderRequestError, QuotaProvider},
 };
-use anyhow::anyhow;
+use anyhow::{Context, anyhow};
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::Deserialize;
+use std::path::PathBuf;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 #[derive(Clone, Debug)]
 pub struct CodexProvider {
     client: Client,
     base_url: String,
+    auth_path: Option<PathBuf>,
 }
 
 impl CodexProvider {
@@ -24,6 +27,14 @@ impl CodexProvider {
         Self {
             client,
             base_url: base_url.into().trim_end_matches('/').to_string(),
+            auth_path: None,
+        }
+    }
+
+    pub fn with_auth_path(self, path: PathBuf) -> Self {
+        Self {
+            auth_path: Some(path),
+            ..self
         }
     }
 }
@@ -199,6 +210,60 @@ impl QuotaProvider for CodexProvider {
         &self,
         creds: &ProviderCredentials,
     ) -> AppResult<ProviderCredentials> {
-        Ok(creds.clone())
+        let refresh_token = creds
+            .refresh_token
+            .as_deref()
+            .ok_or_else(|| anyhow!("no refresh token for Codex"))?;
+
+        let resp: serde_json::Value = self
+            .client
+            .post("https://auth.openai.com/oauth/token")
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .form(&[
+                ("grant_type", "refresh_token"),
+                ("refresh_token", refresh_token),
+                ("client_id", "app_EMoamEEZ73f0CkXaXp7hrann"),
+            ])
+            .send()
+            .await
+            .context("Codex token refresh request failed")?
+            .error_for_status()
+            .context("Codex token refresh rejected")?
+            .json()
+            .await
+            .context("Codex token refresh response parse failed")?;
+
+        let new_access = resp
+            .get("access_token")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("missing access_token in Codex refresh response"))?
+            .to_string();
+
+        let new_refresh = resp
+            .get("refresh_token")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let expires_at = resp
+            .get("expires_in")
+            .and_then(|v| v.as_i64())
+            .map(|secs| OffsetDateTime::now_utc() + time::Duration::seconds(secs));
+
+        let updated = ProviderCredentials {
+            access_token: new_access,
+            refresh_token: new_refresh.or_else(|| creds.refresh_token.clone()),
+            expires_at,
+            account_id: creds.account_id.clone(),
+            raw_source: creds.raw_source.clone(),
+        };
+
+        // Persist back to auth.json so the new tokens survive restart
+        if let Some(ref auth_path) = self.auth_path
+            && let Err(e) = auth::persist_credentials(auth_path, ProviderKind::Codex, &updated)
+        {
+            tracing::warn!(error = %e, "failed to persist refreshed Codex credentials");
+        }
+
+        Ok(updated)
     }
 }
