@@ -178,6 +178,7 @@ impl QuotaProvider for ClaudeProvider {
             tracing::warn!(error = %e, "failed to persist refreshed Claude credentials");
         }
 
+        tracing::info!("Claude token refreshed successfully");
         Ok(updated)
     }
 }

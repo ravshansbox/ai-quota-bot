@@ -39,6 +39,8 @@ where
 
     /// Run one poll cycle and return the collected snapshots.
     pub async fn run_cycle_at(&mut self, now: OffsetDateTime) -> Vec<QuotaSnapshot> {
+        info!("poll cycle starting");
+
         let mut creds = match load_credentials_map(&self.config.auth_path) {
             Ok(c) => c,
             Err(e) => {
@@ -53,7 +55,25 @@ where
         self.collect_provider_snapshots(&self.codex, &mut creds, now, &mut snapshots)
             .await;
 
+        info!(collected = snapshots.len(), "poll cycle complete");
+        for s in &snapshots {
+            let remaining = format_remaining(s.window_kind, s.reset_at, now);
+            info!(
+                provider = s.provider.as_str(),
+                window = s.window_kind.as_str(),
+                usage = s.usage,
+                limit = s.limit,
+                remaining = %remaining,
+                "snapshot",
+            );
+        }
+
         for event in self.detector.detect(snapshots.clone()) {
+            info!(
+                provider = event.provider.as_str(),
+                window = event.window_kind.as_str(),
+                "reset detected"
+            );
             if let Err(e) = self.notifier.notify_reset(&event).await {
                 warn!(error = %e, "failed to send reset notification");
             }
@@ -93,6 +113,7 @@ where
 
     async fn send_startup_summary(&self, snapshots: &[QuotaSnapshot], now: OffsetDateTime) {
         if snapshots.is_empty() {
+            info!("no snapshots to summarize on startup");
             return;
         }
 
@@ -135,6 +156,7 @@ where
         }
 
         let summary = format!("📊 Quota summary\n{}", lines.join("\n"));
+        info!("sending startup summary");
         if let Err(e) = self.notifier.notify_text(&summary).await {
             warn!(error = %e, "failed to send startup summary");
         }
