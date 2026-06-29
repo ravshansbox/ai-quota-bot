@@ -122,7 +122,7 @@ where
                         WindowKind::SevenDays => "7d",
                     };
                     let pct = match (s.usage, s.limit) {
-                        (Some(u), Some(l)) if l > 0 => format!("{}%", u * 100 / l),
+                        (Some(u), Some(l)) if l > 0 => format!("{}% used", u * 100 / l),
                         _ => "?".to_string(),
                     };
                     let reset = format_reset_time(s.window_kind, s.reset_at);
