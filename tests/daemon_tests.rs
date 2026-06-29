@@ -19,8 +19,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tempfile::TempDir;
-use time::macros::datetime;
 use time::OffsetDateTime;
+use time::macros::datetime;
 
 fn credentials() -> ProviderCredentials {
     ProviderCredentials {
@@ -136,7 +136,10 @@ impl QuotaProvider for FakeProvider {
     ) -> Result<Vec<QuotaSnapshot>, ProviderRequestError> {
         let mut state = self.state.lock().unwrap();
         state.fetch_tokens.push(creds.access_token.clone());
-        state.fetch_results.pop_front().unwrap_or_else(|| Ok(Vec::new()))
+        state
+            .fetch_results
+            .pop_front()
+            .unwrap_or_else(|| Ok(Vec::new()))
     }
 
     async fn refresh_credentials(
@@ -318,7 +321,12 @@ async fn non_auth_provider_failure_leaves_other_path_runnable() {
             )]),
         ],
     );
-    let mut daemon = Daemon::new(app_config(auth_path), notifier.clone(), claude.clone(), codex,);
+    let mut daemon = Daemon::new(
+        app_config(auth_path),
+        notifier.clone(),
+        claude.clone(),
+        codex,
+    );
 
     daemon
         .run_cycle_at(datetime!(2026-06-29 12:00 UTC))
@@ -385,12 +393,14 @@ async fn auth_file_reload_picks_up_changed_credentials_on_next_cycle() {
     write_auth_file(&auth_path, "claude-old", "codex-old");
 
     let notifier = FakeNotifier::default();
-    let claude = FakeProvider::new(
-        ProviderKind::Claude,
-        vec![Ok(Vec::new()), Ok(Vec::new())],
-    );
+    let claude = FakeProvider::new(ProviderKind::Claude, vec![Ok(Vec::new()), Ok(Vec::new())]);
     let codex = FakeProvider::new(ProviderKind::Codex, vec![Ok(Vec::new()), Ok(Vec::new())]);
-    let mut daemon = Daemon::new(app_config(auth_path.clone()), notifier, claude.clone(), codex.clone());
+    let mut daemon = Daemon::new(
+        app_config(auth_path.clone()),
+        notifier,
+        claude.clone(),
+        codex.clone(),
+    );
 
     daemon
         .run_cycle_at(datetime!(2026-06-29 12:00 UTC))

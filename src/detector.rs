@@ -26,20 +26,20 @@ impl ResetDetector {
                 window_kind: snapshot.window_kind,
             };
 
-            if self.initialized {
-                if let Some(previous) = self.previous.get(&key) {
-                    let reset_advanced = snapshot.reset_at > previous.reset_at;
-                    let window_changed = snapshot.window_id != previous.window_id;
-                    if reset_advanced || window_changed {
-                        events.push(ResetEvent {
-                            provider: snapshot.provider,
-                            plan: snapshot.plan.clone(),
-                            window_kind: snapshot.window_kind,
-                            reset_at: snapshot.reset_at,
-                            previous_window_id: previous.window_id.clone(),
-                            current_window_id: snapshot.window_id.clone(),
-                        });
-                    }
+            if self.initialized
+                && let Some(previous) = self.previous.get(&key)
+            {
+                let reset_advanced = snapshot.reset_at > previous.reset_at;
+                let window_changed = snapshot.window_id != previous.window_id;
+                if reset_advanced || window_changed {
+                    events.push(ResetEvent {
+                        provider: snapshot.provider,
+                        plan: snapshot.plan.clone(),
+                        window_kind: snapshot.window_kind,
+                        reset_at: snapshot.reset_at,
+                        previous_window_id: previous.window_id.clone(),
+                        current_window_id: snapshot.window_id.clone(),
+                    });
                 }
             }
 
