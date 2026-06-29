@@ -32,27 +32,27 @@ fn credentials() -> ProviderCredentials {
     }
 }
 
-fn claude_snapshot(reset_at: OffsetDateTime, window_id: &str) -> QuotaSnapshot {
+fn claude_snapshot(reset_at: OffsetDateTime, window_id: &str, usage: u64) -> QuotaSnapshot {
     QuotaSnapshot {
         provider: ProviderKind::Claude,
         plan: "max".into(),
         window_kind: WindowKind::FiveHours,
         window_id: Some(window_id.into()),
         reset_at,
-        usage: Some(1),
-        limit: Some(10),
+        usage: Some(usage),
+        limit: Some(100),
     }
 }
 
-fn codex_snapshot(reset_at: OffsetDateTime, window_id: &str) -> QuotaSnapshot {
+fn codex_snapshot(reset_at: OffsetDateTime, window_id: &str, usage: u64) -> QuotaSnapshot {
     QuotaSnapshot {
         provider: ProviderKind::Codex,
         plan: "pro".into(),
         window_kind: WindowKind::SevenDays,
         window_id: Some(window_id.into()),
         reset_at,
-        usage: Some(3),
-        limit: Some(50),
+        usage: Some(usage),
+        limit: Some(100),
     }
 }
 
@@ -237,6 +237,7 @@ async fn first_successful_cycle_sends_no_notifications() {
         vec![Ok(vec![claude_snapshot(
             datetime!(2026-06-29 12:00 UTC),
             "window-a",
+            42,
         )])],
     );
     let codex = FakeProvider::new(
@@ -244,6 +245,7 @@ async fn first_successful_cycle_sends_no_notifications() {
         vec![Ok(vec![codex_snapshot(
             datetime!(2026-06-30 00:00 UTC),
             "window-a",
+            10,
         )])],
     );
     let mut daemon = Daemon::new(app_config(auth_path), notifier.clone(), claude, codex);
@@ -265,10 +267,12 @@ async fn second_cycle_after_reset_sends_one_notification() {
             Ok(vec![claude_snapshot(
                 datetime!(2026-06-29 12:00 UTC),
                 "window-a",
+                42,
             )]),
             Ok(vec![claude_snapshot(
                 datetime!(2026-06-29 17:00 UTC),
                 "window-b",
+                0,
             )]),
         ],
     );
@@ -278,10 +282,12 @@ async fn second_cycle_after_reset_sends_one_notification() {
             Ok(vec![codex_snapshot(
                 datetime!(2026-06-30 00:00 UTC),
                 "window-a",
+                10,
             )]),
             Ok(vec![codex_snapshot(
                 datetime!(2026-06-30 00:00 UTC),
                 "window-a",
+                10,
             )]),
         ],
     );
@@ -318,10 +324,12 @@ async fn non_auth_provider_failure_leaves_other_path_runnable() {
             Ok(vec![codex_snapshot(
                 datetime!(2026-06-30 00:00 UTC),
                 "window-a",
+                33,
             )]),
             Ok(vec![codex_snapshot(
                 datetime!(2026-07-07 00:00 UTC),
                 "window-b",
+                5,
             )]),
         ],
     );
@@ -365,6 +373,7 @@ async fn auth_failure_triggers_refresh_credentials_once_and_then_succeeds() {
             Ok(vec![claude_snapshot(
                 datetime!(2026-06-29 12:00 UTC),
                 "window-a",
+                42,
             )]),
         ],
     )
@@ -374,6 +383,7 @@ async fn auth_failure_triggers_refresh_credentials_once_and_then_succeeds() {
         vec![Ok(vec![codex_snapshot(
             datetime!(2026-06-30 00:00 UTC),
             "window-a",
+            10,
         )])],
     );
     let mut daemon = Daemon::new(app_config(auth_path), notifier, claude.clone(), codex);
