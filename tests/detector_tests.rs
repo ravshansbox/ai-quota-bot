@@ -23,15 +23,26 @@ fn first_poll_initializes_without_alert() {
 }
 
 #[test]
-fn usage_drop_detects_reset() {
+fn window_boundary_advancing_detects_reset() {
     let mut detector = ResetDetector::default();
-    // First poll: 42% used
+    // First poll: window resets at 12:00.
     detector.detect(vec![snapshot(datetime!(2026-06-29 12:00 UTC), "a", 42)]);
-    // Second poll: dropped to 0% — reset happened
+    // Second poll: new window with a later reset_at — reset happened.
     let events = detector.detect(vec![snapshot(datetime!(2026-06-29 17:00 UTC), "b", 0)]);
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].provider, ProviderKind::Claude);
     assert_eq!(events[0].window_kind, WindowKind::FiveHours);
+}
+
+#[test]
+fn reset_from_low_usage_still_detected() {
+    let mut detector = ResetDetector::default();
+    // Barely used the window (3%) then it rolled over to 0% — a <5% drop,
+    // which the old usage-threshold logic missed. The boundary moved, so it
+    // is a real reset.
+    detector.detect(vec![snapshot(datetime!(2026-06-29 12:00 UTC), "a", 3)]);
+    let events = detector.detect(vec![snapshot(datetime!(2026-06-29 17:00 UTC), "b", 0)]);
+    assert_eq!(events.len(), 1);
 }
 
 #[test]
@@ -46,22 +57,21 @@ fn unchanged_snapshot_emits_no_event() {
 }
 
 #[test]
-fn small_usage_fluctuation_does_not_trigger() {
+fn usage_dropping_within_same_window_does_not_trigger() {
     let mut detector = ResetDetector::default();
-    // First poll: 42% used
-    detector.detect(vec![snapshot(datetime!(2026-06-29 12:00 UTC), "a", 42)]);
-    // Second poll: 40% used (only 2% drop — noise, not a reset)
-    let events = detector.detect(vec![snapshot(datetime!(2026-06-29 12:10 UTC), "a", 40)]);
+    let reset_at = datetime!(2026-06-29 12:00 UTC);
+
+    // Same window boundary; provider corrected usage downward. Not a reset.
+    detector.detect(vec![snapshot(reset_at, "a", 42)]);
+    let events = detector.detect(vec![snapshot(reset_at, "b", 0)]);
     assert!(events.is_empty());
 }
 
 #[test]
-fn usage_drop_without_timestamp_change_does_not_trigger() {
+fn reset_at_moving_backwards_does_not_trigger() {
     let mut detector = ResetDetector::default();
-    let reset_at = datetime!(2026-06-29 12:00 UTC);
-
-    detector.detect(vec![snapshot(reset_at, "a", 42)]);
-    // usage dropped but same reset_at timestamp — no real reset
-    let events = detector.detect(vec![snapshot(reset_at, "b", 0)]);
+    // A spurious earlier reset_at (clock skew / provider jitter) is not a reset.
+    detector.detect(vec![snapshot(datetime!(2026-06-29 17:00 UTC), "a", 42)]);
+    let events = detector.detect(vec![snapshot(datetime!(2026-06-29 12:00 UTC), "b", 0)]);
     assert!(events.is_empty());
 }
