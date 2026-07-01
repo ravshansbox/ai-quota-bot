@@ -99,8 +99,9 @@ impl QuotaProvider for ClaudeProvider {
                 window_kind: WindowKind::FiveHours,
                 window_id: Some("5h".into()),
                 reset_at,
-                usage: Some(entry.utilization as u64),
+                usage: Some(clamp_percentage(entry.utilization)),
                 limit: Some(100),
+                resets_available: 0,
             });
         }
 
@@ -111,8 +112,9 @@ impl QuotaProvider for ClaudeProvider {
                 window_kind: WindowKind::SevenDays,
                 window_id: Some("7d".into()),
                 reset_at,
-                usage: Some(entry.utilization as u64),
+                usage: Some(clamp_percentage(entry.utilization)),
                 limit: Some(100),
+                resets_available: 0,
             });
         }
 
@@ -130,7 +132,7 @@ impl QuotaProvider for ClaudeProvider {
 
         let resp: serde_json::Value = self
             .client
-            .post("https://api.anthropic.com/v1/oauth/token")
+            .post(format!("{}/v1/oauth/token", self.base_url))
             .header("Content-Type", "application/x-www-form-urlencoded")
             .form(&[
                 ("grant_type", "refresh_token"),
@@ -181,11 +183,20 @@ impl QuotaProvider for ClaudeProvider {
     }
 }
 
-fn parse_reset_at(raw: Option<&str>) -> Result<OffsetDateTime, ProviderRequestError> {
+/// Clamp a raw percentage value into the valid `0..=100` range.
+fn clamp_percentage(value: f64) -> u64 {
+    value.clamp(0.0, 100.0) as u64
+}
+
+/// Parse `resets_at` as RFC 3339. Returns `Ok(None)` when the field is absent
+/// so callers can report the window with an "unknown" reset time instead of
+/// faking a moving timestamp.
+fn parse_reset_at(raw: Option<&str>) -> Result<Option<OffsetDateTime>, ProviderRequestError> {
     match raw {
         Some(s) => OffsetDateTime::parse(s, &Rfc3339)
+            .map(Some)
             .context("invalid reset_at RFC3339")
             .map_err(ProviderRequestError::Other),
-        None => Ok(OffsetDateTime::now_utc()),
+        None => Ok(None),
     }
 }

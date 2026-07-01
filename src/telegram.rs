@@ -1,6 +1,6 @@
 use crate::{
     error::AppResult,
-    model::{ProviderKind, ResetEvent, WindowKind, format_remaining},
+    model::{ProviderKind, QuotaSnapshot, WindowKind, format_remaining},
 };
 use async_trait::async_trait;
 use reqwest::Client;
@@ -9,13 +9,8 @@ use time::OffsetDateTime;
 
 #[async_trait]
 pub trait ResetNotifier: Send + Sync {
-    async fn notify_reset(&self, event: &ResetEvent) -> AppResult<()>;
-
-    /// Send a free-form text message, used for startup summaries etc.
-    /// Default implementation is a no-op so test fakes don't need to override it.
-    async fn notify_text(&self, _text: &str) -> AppResult<()> {
-        Ok(())
-    }
+    /// Send a free-form text message, used for startup summaries and reset notifications.
+    async fn notify_text(&self, text: &str) -> AppResult<()>;
 }
 
 #[derive(Clone, Debug)]
@@ -28,10 +23,6 @@ pub struct TelegramClient {
 
 #[async_trait]
 impl ResetNotifier for TelegramClient {
-    async fn notify_reset(&self, event: &ResetEvent) -> AppResult<()> {
-        self.send_reset(event).await
-    }
-
     async fn notify_text(&self, text: &str) -> AppResult<()> {
         self.send_text(text).await
     }
@@ -61,12 +52,7 @@ impl TelegramClient {
         }
     }
 
-    pub async fn send_reset(&self, event: &ResetEvent) -> AppResult<()> {
-        self.send_text(&format_reset_message(event, OffsetDateTime::now_utc()))
-            .await
-    }
-
-    async fn send_text(&self, text: &str) -> AppResult<()> {
+    pub async fn send_text(&self, text: &str) -> AppResult<()> {
         let url = format!("{}/bot{}/sendMessage", self.api_base, self.bot_token);
         let body = SendMessageBody {
             chat_id: self.chat_id.clone(),
@@ -90,26 +76,100 @@ struct SendMessageBody {
     text: String,
 }
 
-pub fn format_reset_message(event: &ResetEvent, now: OffsetDateTime) -> String {
-    let provider_name = display_provider(event.provider);
-    let label = match event.window_kind {
-        WindowKind::FiveHours => "5h",
-        WindowKind::SevenDays => "7d",
-    };
-    let pct = match (event.usage, event.limit) {
-        (Some(u), Some(l)) if l > 0 => format!("{}% used", u * 100 / l),
+/// Format a single quota-window snapshot line, e.g. `7d: 73% left (4d 19h)`.
+pub fn format_window_line(
+    window_kind: WindowKind,
+    reset_at: Option<OffsetDateTime>,
+    usage: Option<u64>,
+    limit: Option<u64>,
+    now: OffsetDateTime,
+) -> String {
+    let label = window_kind.as_str();
+    let pct = match (usage, limit) {
+        (Some(u), Some(l)) if l > 0 => format!("{}% left", 100 - (u * 100 / l)),
         _ => "?".to_string(),
     };
-    let remaining = format_remaining(event.window_kind, event.reset_at, now);
-    format!(
-        "📊 Quota summary\n{}: {} {} ({})",
-        provider_name, label, pct, remaining,
-    )
+    let remaining = format_remaining(reset_at, now);
+    format!("{}: {} ({})", label, pct, remaining)
+}
+
+/// Build one provider line from its snapshots, e.g.
+/// `claude: 7d: 73% left (4d 19h), 5h: 100% left (unknown)`.
+pub fn format_provider_line(
+    provider: ProviderKind,
+    snapshots: &[QuotaSnapshot],
+    now: OffsetDateTime,
+) -> String {
+    let provider_name = display_provider(provider);
+    let mut parts: Vec<String> = Vec::new();
+
+    for window_kind in [WindowKind::SevenDays, WindowKind::FiveHours] {
+        if let Some(s) = snapshots.iter().find(|s| s.window_kind == window_kind) {
+            parts.push(format_window_line(
+                s.window_kind,
+                s.reset_at,
+                s.usage,
+                s.limit,
+                now,
+            ));
+        }
+    }
+
+    let resets_available = snapshots.iter().map(|s| s.resets_available).max().unwrap_or(0);
+    if resets_available > 0 {
+        parts.push(format!(
+            "{} reset{}",
+            resets_available,
+            if resets_available == 1 { "" } else { "s" }
+        ));
+    }
+
+    format!("{}: {}", provider_name, parts.join(", "))
+}
+
+/// Build the full summary message with optional provider filter.
+/// When `providers` is `None`, all providers are included (startup).
+/// When `providers` is `Some(...)`, only those providers appear (reset).
+pub fn format_summary_message(
+    snapshots: &[QuotaSnapshot],
+    providers: Option<&[ProviderKind]>,
+    now: OffsetDateTime,
+) -> String {
+    let mut lines: Vec<String> = Vec::new();
+
+    let candidates: &[ProviderKind] = if let Some(filter) = providers {
+        filter
+    } else {
+        &[ProviderKind::Claude, ProviderKind::Codex]
+    };
+
+    for &provider in candidates {
+        let provider_snapshots: Vec<&QuotaSnapshot> = snapshots
+            .iter()
+            .filter(|s| s.provider == provider)
+            .collect();
+
+        if provider_snapshots.is_empty() {
+            continue;
+        }
+
+        lines.push(format_provider_line(
+            provider,
+            &provider_snapshots.into_iter().cloned().collect::<Vec<_>>(),
+            now,
+        ));
+    }
+
+    if lines.is_empty() {
+        return String::new();
+    }
+
+    lines.join("\n")
 }
 
 fn display_provider(provider: ProviderKind) -> &'static str {
     match provider {
-        ProviderKind::Claude => "Claude",
-        ProviderKind::Codex => "Codex",
+        ProviderKind::Claude => "claude",
+        ProviderKind::Codex => "codex",
     }
 }

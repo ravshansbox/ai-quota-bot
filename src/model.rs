@@ -43,56 +43,48 @@ pub struct QuotaSnapshot {
     pub provider: ProviderKind,
     pub window_kind: WindowKind,
     pub window_id: Option<String>,
-    pub reset_at: OffsetDateTime,
+    pub reset_at: Option<OffsetDateTime>,
     pub usage: Option<u64>,
     pub limit: Option<u64>,
+    /// OpenAI Codex "reset credits" available to instantly reset the
+    /// weekly window. Always 0 for Claude.
+    pub resets_available: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResetEvent {
     pub provider: ProviderKind,
     pub window_kind: WindowKind,
-    pub reset_at: OffsetDateTime,
+    pub reset_at: Option<OffsetDateTime>,
     pub usage: Option<u64>,
     pub limit: Option<u64>,
 }
 
-/// Format remaining time as "3h", "1h 28m", "6d 15h", "0m".
-pub fn format_remaining(
-    window_kind: WindowKind,
-    reset_at: OffsetDateTime,
-    now: OffsetDateTime,
-) -> String {
+/// Format remaining time as "3h 2m", "1h 28m", "6d 15h", "42m", "now", or
+/// "unknown" when `reset_at` is not known.
+pub fn format_remaining(reset_at: Option<OffsetDateTime>, now: OffsetDateTime) -> String {
+    let Some(reset_at) = reset_at else {
+        return "unknown".to_string();
+    };
+
     let dur = if reset_at > now {
         reset_at - now
     } else {
-        return "0m".to_string();
+        return "now".to_string();
     };
 
-    match window_kind {
-        WindowKind::FiveHours => {
-            let total_minutes = dur.whole_minutes();
-            let hours = total_minutes / 60;
-            let minutes = total_minutes % 60;
-            if hours > 0 && minutes > 0 {
-                format!("{}h {}m", hours, minutes)
-            } else if hours > 0 {
-                format!("{}h", hours)
-            } else {
-                format!("{}m", minutes)
-            }
-        }
-        WindowKind::SevenDays => {
-            let total_hours = dur.whole_hours();
-            let days = total_hours / 24;
-            let hours = total_hours % 24;
-            if days > 0 && hours > 0 {
-                format!("{}d {}h", days, hours)
-            } else if days > 0 {
-                format!("{}d", days)
-            } else {
-                format!("{}h", hours)
-            }
-        }
+    let total_minutes = dur.whole_minutes();
+    let days = total_minutes / (24 * 60);
+    let hours = (total_minutes / 60) % 24;
+    let minutes = total_minutes % 60;
+
+    if days > 0 {
+        format!("{}d {}h", days, hours)
+    } else if hours > 0 {
+        format!("{}h {}m", hours, minutes)
+    } else if minutes > 0 {
+        format!("{}m", minutes)
+    } else {
+        "now".to_string()
     }
 }
