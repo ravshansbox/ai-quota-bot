@@ -164,7 +164,12 @@ pub fn format_summary_message(
         return String::new();
     }
 
-    lines.join("\n")
+    let header = if providers.is_none() {
+        "🚀 Startup summary"
+    } else {
+        "🔄 Reset detected"
+    };
+    format!("{}\n{}", header, lines.join("\n"))
 }
 
 fn display_provider(provider: ProviderKind) -> &'static str {
