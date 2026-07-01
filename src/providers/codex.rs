@@ -15,6 +15,7 @@ use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 pub struct CodexProvider {
     client: Client,
     base_url: String,
+    token_url: String,
     auth_path: Option<PathBuf>,
 }
 
@@ -27,7 +28,15 @@ impl CodexProvider {
         Self {
             client,
             base_url: base_url.into().trim_end_matches('/').to_string(),
+            token_url: "https://auth.openai.com".to_string(),
             auth_path: None,
+        }
+    }
+
+    pub fn with_token_url(self, token_url: impl Into<String>) -> Self {
+        Self {
+            token_url: token_url.into(),
+            ..self
         }
     }
 
@@ -45,11 +54,12 @@ impl CodexProvider {
 struct CodexUsageResponse {
     #[serde(rename = "rate_limit", alias = "rate_limits")]
     rate_limit: Option<RateLimit>,
-    #[allow(dead_code)]
-    credits: Option<Credits>,
-    #[serde(rename = "spend_control")]
-    #[allow(dead_code)]
-    spend_control: Option<SpendControl>,
+    rate_limit_reset_credits: Option<RateLimitResetCredits>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RateLimitResetCredits {
+    available_count: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -76,19 +86,9 @@ struct RateLimitWindow {
     reset_time_ms: Option<i64>,
 }
 
-#[derive(Debug, Deserialize)]
-struct Credits {
-    #[serde(rename = "has_credits")]
-    #[allow(dead_code)]
-    has_credits: Option<bool>,
-    #[allow(dead_code)]
-    balance: Option<serde_json::Value>,
-}
-
-#[derive(Debug, Deserialize)]
-struct SpendControl {
-    #[allow(dead_code)]
-    reached: Option<bool>,
+/// Clamp a raw percentage value into the valid `0..=100` range.
+fn clamp_percentage(value: f64) -> u64 {
+    value.clamp(0.0, 100.0) as u64
 }
 
 fn parse_reset_timestamp(value: Option<serde_json::Value>) -> Option<OffsetDateTime> {
@@ -142,6 +142,11 @@ impl QuotaProvider for CodexProvider {
             .map_err(|err| ProviderRequestError::Other(err.into()))?;
 
         let mut snapshots = Vec::new();
+        let resets_available = payload
+            .rate_limit_reset_credits
+            .as_ref()
+            .and_then(|c| c.available_count)
+            .unwrap_or(0);
 
         // Try to extract the 5h primary window
         let five_hour = payload
@@ -156,14 +161,12 @@ impl QuotaProvider for CodexProvider {
             });
 
         if let Some(window) = five_hour {
-            let used = window.used_percent.unwrap_or(0.0) as u64;
+            let used = clamp_percentage(window.used_percent.unwrap_or(0.0));
             let reset_at = parse_reset_timestamp(window.reset_at.clone().or_else(|| {
                 window
                     .reset_time_ms
                     .map(|ms| serde_json::Value::Number(serde_json::Number::from(ms / 1000)))
-            }))
-            .unwrap_or_else(OffsetDateTime::now_utc);
-
+            }));
             snapshots.push(QuotaSnapshot {
                 provider: ProviderKind::Codex,
                 window_kind: WindowKind::FiveHours,
@@ -171,6 +174,7 @@ impl QuotaProvider for CodexProvider {
                 reset_at,
                 usage: Some(used),
                 limit: Some(100),
+                resets_available,
             });
         }
 
@@ -180,14 +184,12 @@ impl QuotaProvider for CodexProvider {
             .as_ref()
             .and_then(|rl| rl.secondary_window.as_ref())
         {
-            let used = window.used_percent.unwrap_or(0.0) as u64;
+            let used = clamp_percentage(window.used_percent.unwrap_or(0.0));
             let reset_at = parse_reset_timestamp(window.reset_at.clone().or_else(|| {
                 window
                     .reset_time_ms
                     .map(|ms| serde_json::Value::Number(serde_json::Number::from(ms / 1000)))
-            }))
-            .unwrap_or_else(OffsetDateTime::now_utc);
-
+            }));
             snapshots.push(QuotaSnapshot {
                 provider: ProviderKind::Codex,
                 window_kind: WindowKind::SevenDays,
@@ -195,6 +197,7 @@ impl QuotaProvider for CodexProvider {
                 reset_at,
                 usage: Some(used),
                 limit: Some(100),
+                resets_available,
             });
         }
 
@@ -212,7 +215,7 @@ impl QuotaProvider for CodexProvider {
 
         let resp: serde_json::Value = self
             .client
-            .post("https://auth.openai.com/oauth/token")
+            .post(format!("{}/oauth/token", self.token_url))
             .header("Content-Type", "application/x-www-form-urlencoded")
             .form(&[
                 ("grant_type", "refresh_token"),
