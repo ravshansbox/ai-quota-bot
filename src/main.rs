@@ -6,14 +6,24 @@ use ai_quota_bot::{
 };
 use tracing_subscriber::EnvFilter;
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
+        .with_timer(
+            tracing_subscriber::fmt::time::OffsetTime::local_rfc_3339()
+                .expect("failed to determine local timezone"),
+        )
         .init();
 
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?
+        .block_on(run())
+}
+
+async fn run() -> anyhow::Result<()> {
     let config = AppConfig::from_env()?;
     tracing::info!(
         poll_interval_secs = config.poll_interval_secs,

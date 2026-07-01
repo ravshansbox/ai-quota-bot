@@ -7,10 +7,9 @@ struct SnapshotKey {
     window_kind: WindowKind,
 }
 
-/// Last seen window boundary, used to detect that the window rolled over.
 #[derive(Debug, Clone)]
 struct CachedState {
-    reset_at_ms: i128,
+    usage: Option<u64>,
 }
 
 #[derive(Default)]
@@ -30,29 +29,26 @@ impl ResetDetector {
                 window_kind: snapshot.window_kind,
             };
 
-            let reset_at_ms = snapshot.reset_at.unix_timestamp_nanos();
-
             if self.initialized
                 && let Some(prev) = self.previous.get(&key)
+                && let (Some(previous_usage), Some(current_usage)) = (prev.usage, snapshot.usage)
+                && current_usage < previous_usage
             {
-                // The authoritative reset signal is the window boundary moving
-                // forward: the provider handed us a brand new window with a
-                // later `reset_at`. Usage dropping is just a side effect of
-                // that, so we key on the boundary itself. A strictly-greater
-                // comparison ignores the provider nudging the timestamp
-                // backwards within the same window.
-                if reset_at_ms > prev.reset_at_ms {
-                    events.push(ResetEvent {
-                        provider: snapshot.provider,
-                        window_kind: snapshot.window_kind,
-                        reset_at: snapshot.reset_at,
-                        usage: snapshot.usage,
-                        limit: snapshot.limit,
-                    });
-                }
+                events.push(ResetEvent {
+                    provider: snapshot.provider,
+                    window_kind: snapshot.window_kind,
+                    reset_at: snapshot.reset_at,
+                    usage: snapshot.usage,
+                    limit: snapshot.limit,
+                });
             }
 
-            next.insert(key, CachedState { reset_at_ms });
+            next.insert(
+                key,
+                CachedState {
+                    usage: snapshot.usage,
+                },
+            );
         }
 
         self.previous = next;

@@ -4,7 +4,7 @@ use crate::{
     providers::{ProviderRequestError, QuotaProvider},
 };
 use time::{Duration, OffsetDateTime};
-use tracing::info;
+use tracing::{info, warn};
 
 pub fn should_refresh(creds: &ProviderCredentials, now: OffsetDateTime, leeway: Duration) -> bool {
     match creds.expires_at {
@@ -55,7 +55,7 @@ pub async fn fetch_with_refresh<P: QuotaProvider>(
             Ok((refreshed, snapshots))
         }
         Err(ProviderRequestError::Other(err)) => {
-            info!(provider = provider.kind().as_str(), "fetch failed: {}", err,);
+            warn!(provider = provider.kind().as_str(), "fetch failed: {}", err,);
             Err(err)
         }
     }
