@@ -33,6 +33,11 @@ impl AppConfig {
             })
             .transpose()?
             .unwrap_or(600);
+        if poll_interval_secs == 0 {
+            return Err(anyhow!(
+                "AI_QUOTA_POLL_INTERVAL_SECS must be greater than 0"
+            ));
+        }
 
         Ok(Self {
             telegram_bot_token,

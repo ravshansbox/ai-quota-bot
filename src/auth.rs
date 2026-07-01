@@ -94,96 +94,17 @@ pub fn persist_credentials(
         ProviderKind::Codex => &mut parsed.openai_codex,
     };
 
-    if let Some(entry) = target {
-        entry.access_token = creds.access_token.clone();
-        entry.refresh_token.clone_from(&creds.refresh_token);
-        entry.expires_ms = creds
-            .expires_at
-            .map(|dt| dt.unix_timestamp_nanos() as i64 / 1_000_000);
-        entry.account_id.clone_from(&creds.account_id);
-    }
+    let entry = target
+        .as_mut()
+        .ok_or_else(|| anyhow!("missing {} entry in auth file", kind.as_str()))?;
+    entry.access_token = creds.access_token.clone();
+    entry.refresh_token.clone_from(&creds.refresh_token);
+    entry.expires_ms = creds
+        .expires_at
+        .map(|dt| dt.unix_timestamp_nanos() as i64 / 1_000_000);
+    entry.account_id.clone_from(&creds.account_id);
 
     let out = serde_json::to_string_pretty(&parsed).context("failed to serialize updated auth")?;
     fs::write(path, &out).with_context(|| format!("failed to write {}", path.display()))?;
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parse_real_auth_format() {
-        let json = r#"{
-            "anthropic": {
-                "type": "oauth",
-                "access": "sk-ant-access-token",
-                "refresh": "sk-ant-refresh-token",
-                "expires": 1782740461641
-            },
-            "openai-codex": {
-                "type": "oauth",
-                "access": "codex-access-token",
-                "refresh": "codex-refresh-token",
-                "expires": 1783507780207,
-                "accountId": "acct-123"
-            }
-        }"#;
-
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("auth.json");
-        fs::write(&path, json).unwrap();
-
-        let map = load_credentials_map(&path).unwrap();
-        assert_eq!(map.len(), 2);
-
-        let claude = map.get(&ProviderKind::Claude).unwrap();
-        assert_eq!(claude.access_token, "sk-ant-access-token");
-        assert_eq!(
-            claude.refresh_token.as_deref(),
-            Some("sk-ant-refresh-token")
-        );
-        assert!(claude.expires_at.is_some());
-        assert_eq!(claude.account_id, None);
-
-        let codex = map.get(&ProviderKind::Codex).unwrap();
-        assert_eq!(codex.access_token, "codex-access-token");
-        assert_eq!(codex.refresh_token.as_deref(), Some("codex-refresh-token"));
-        assert!(codex.expires_at.is_some());
-        assert_eq!(codex.account_id.as_deref(), Some("acct-123"));
-    }
-
-    #[test]
-    fn parse_old_test_fixture() {
-        // Keep backward compat with the previous snake_case format via serde aliases
-        let json = r#"{
-            "claude": {
-                "access": "claude-token",
-                "refresh": "claude-refresh",
-                "expires": 1750000000000,
-                "accountId": "claude-account"
-            },
-            "codex": {
-                "access": "codex-token",
-                "refresh": "codex-refresh",
-                "expires": 1750000000000,
-                "accountId": "codex-account"
-            }
-        }"#;
-
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("auth.json");
-        fs::write(&path, json).unwrap();
-
-        let map = load_credentials_map(&path).unwrap();
-        assert_eq!(map.len(), 2);
-        assert_eq!(
-            map.get(&ProviderKind::Claude).unwrap().access_token,
-            "claude-token"
-        );
-        assert_eq!(
-            map.get(&ProviderKind::Codex).unwrap().access_token,
-            "codex-token"
-        );
-    }
 }

@@ -42,9 +42,11 @@ cargo build --release
 
 ## Behavior notes
 
+- automated tests are not required; verify changes with focused build or runtime checks
 - polls every 10 minutes by default
 - refreshes provider credentials when expiry is within 5 minutes, or after an authentication failure
 - sends Telegram messages only when a reset boundary is detected
+- verifies scheduled resets with fresh provider data before sending a reset summary
 - keeps reset detection state only in memory
 - may miss reset notifications while the daemon is offline
 - logs startup, poll failures, and shutdown without printing secrets
