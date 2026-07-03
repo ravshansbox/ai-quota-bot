@@ -8,13 +8,13 @@ text exactly (source: https://raw.githubusercontent.com/ravshansbox/pi-quota/mai
 Target line shape (per provider):
 
 ```
-claude: 7d: 73% left (4d 19h), 5h: 100% left (unknown)
-codex: 7d: 85% left (5d 18h), 5h: 96% left (4h 51m), 3 resets
+claude: 7d: 27% used (4d 19h), 5h: 0% used (unknown)
+codex: 7d: 15% used (5d 18h), 5h: 4% used (4h 51m), 3 resets
 ```
 
 ## Changes
 
-1. **Remaining, not used** — display `100 - utilization`% instead of used%.
+1. **Used, not remaining** — display utilization% instead of `100 - utilization`%.
 2. **Order** — 7d before 5h for both providers.
 3. **Time formatting** — replace the window-kind-specific logic in
    `format_remaining` with pi-quota's exact algorithm, independent of window
@@ -53,7 +53,7 @@ codex: 7d: 85% left (5d 18h), 5h: 96% left (4h 51m), 3 resets
 - `src/providers/codex.rs` — same for Codex windows; parse
   `rate_limit_reset_credits.available_count` and thread it onto Codex
   snapshots.
-- `src/telegram.rs` — remaining%, 7d-then-5h order, lowercase labels, reset
+- `src/telegram.rs` — used%, 7d-then-5h order, lowercase labels, reset
   count suffix, drop summary header.
 - `src/daemon.rs` — `schedule_from_snapshots` skips snapshots with
   `reset_at: None`.

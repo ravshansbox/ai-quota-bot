@@ -76,7 +76,7 @@ struct SendMessageBody {
     text: String,
 }
 
-/// Format a single quota-window snapshot line, e.g. `7d: 73% left (4d 19h)`.
+/// Format a single quota-window snapshot line, e.g. `7d: 27% used (4d 19h)`.
 pub fn format_window_line(
     window_kind: WindowKind,
     reset_at: Option<OffsetDateTime>,
@@ -86,7 +86,7 @@ pub fn format_window_line(
 ) -> String {
     let label = window_kind.as_str();
     let pct = match (usage, limit) {
-        (Some(u), Some(l)) if l > 0 => format!("{}% left", 100 - (u * 100 / l)),
+        (Some(u), Some(l)) if l > 0 => format!("{}% used", u * 100 / l),
         _ => "?".to_string(),
     };
     let remaining = format_remaining(reset_at, now);
@@ -94,7 +94,7 @@ pub fn format_window_line(
 }
 
 /// Build one provider line from its snapshots, e.g.
-/// `claude: 7d: 73% left (4d 19h), 5h: 100% left (unknown)`.
+/// `claude: 7d: 27% used (4d 19h), 5h: 0% used (unknown)`.
 pub fn format_provider_line(
     provider: ProviderKind,
     snapshots: &[QuotaSnapshot],
