@@ -8,8 +8,11 @@ use crate::{
     providers::QuotaProvider,
     telegram::{ResetNotifier, format_summary_message},
 };
-use std::collections::HashSet;
-use std::time::Duration;
+use std::{
+    collections::HashSet,
+    process::{Command, Stdio},
+    time::Duration,
+};
 use time::OffsetDateTime;
 use tokio::time::sleep;
 use tracing::{info, warn};
@@ -123,6 +126,7 @@ where
             {
                 warn!(provider = provider.as_str(), error = %e, "failed to send reset notification");
             }
+            self.ping_provider(provider);
         }
 
         snapshots
@@ -299,6 +303,30 @@ where
             {
                 warn!(provider = provider.as_str(), error = %e, "failed to send scheduled reset notification");
             }
+            self.ping_provider(provider);
+        }
+    }
+
+    fn ping_provider(&self, provider: ProviderKind) {
+        let spawn_result = Command::new("pi")
+            .args([
+                "--no-session",
+                "--no-extensions",
+                "--no-context-files",
+                "--no-tools",
+                "--provider",
+                provider.cli_provider_name(),
+                "-p",
+                "hi",
+            ])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn();
+
+        match spawn_result {
+            Ok(_) => info!(provider = provider.as_str(), "provider ping spawned"),
+            Err(error) => warn!(provider = provider.as_str(), error = %error, "provider ping failed to spawn"),
         }
     }
 

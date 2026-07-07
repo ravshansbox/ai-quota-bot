@@ -46,6 +46,7 @@ cargo build --release
 - polls every 10 minutes by default
 - refreshes provider credentials when expiry is within 5 minutes, or after an authentication failure
 - sends Telegram messages only when a reset boundary is detected
+- spawns a background `pi --provider … -p hi` ping when a provider's 5h or 7d quota reset is confirmed
 - verifies scheduled resets with fresh provider data before sending a reset summary
 - keeps reset detection state only in memory
 - may miss reset notifications while the daemon is offline

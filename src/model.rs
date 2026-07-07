@@ -13,6 +13,13 @@ impl ProviderKind {
             Self::Codex => "codex",
         }
     }
+
+    pub fn cli_provider_name(self) -> &'static str {
+        match self {
+            Self::Claude => "anthropic",
+            Self::Codex => "openai",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
