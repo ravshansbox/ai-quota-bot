@@ -311,11 +311,10 @@ where
         let spawn_result = Command::new("pi")
             .args([
                 "--no-session",
-                "--no-extensions",
                 "--no-context-files",
                 "--no-tools",
-                "--provider",
-                provider.cli_provider_name(),
+                "--model",
+                provider.cli_model_name(),
                 "-p",
                 "hi",
             ])

@@ -14,10 +14,10 @@ impl ProviderKind {
         }
     }
 
-    pub fn cli_provider_name(self) -> &'static str {
+    pub fn cli_model_name(self) -> &'static str {
         match self {
-            Self::Claude => "anthropic",
-            Self::Codex => "openai",
+            Self::Claude => "anthropic/claude-sonnet-4-5",
+            Self::Codex => "openai-codex/gpt-5.4-mini",
         }
     }
 }
