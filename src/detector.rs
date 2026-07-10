@@ -32,7 +32,9 @@ impl ResetDetector {
             if self.initialized
                 && let Some(prev) = self.previous.get(&key)
                 && let (Some(previous_usage), Some(current_usage)) = (prev.usage, snapshot.usage)
-                && current_usage < previous_usage
+                // Codex windows slide, so usage drifts down without a real
+                // reset. Only a large drop (>=50 points) signals a rollover.
+                && previous_usage.saturating_sub(current_usage) >= 50
             {
                 events.push(ResetEvent {
                     provider: snapshot.provider,

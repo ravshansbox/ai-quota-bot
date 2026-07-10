@@ -2,7 +2,7 @@ use crate::{
     auth,
     error::AppResult,
     model::{ProviderCredentials, ProviderKind, QuotaSnapshot, WindowKind},
-    providers::{ProviderRequestError, QuotaProvider},
+    providers::{ProviderRequestError, QuotaProvider, clamp_percentage},
 };
 use anyhow::{Context, anyhow};
 use async_trait::async_trait;
@@ -183,10 +183,6 @@ impl QuotaProvider for ClaudeProvider {
     }
 }
 
-/// Clamp a raw percentage value into the valid `0..=100` range.
-fn clamp_percentage(value: f64) -> u64 {
-    value.clamp(0.0, 100.0) as u64
-}
 
 /// Parse `resets_at` as RFC 3339. Returns `Ok(None)` when the field is absent
 /// so callers can report the window with an "unknown" reset time instead of

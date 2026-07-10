@@ -29,3 +29,8 @@ pub trait QuotaProvider: Send + Sync {
         creds: &ProviderCredentials,
     ) -> AppResult<ProviderCredentials>;
 }
+
+/// Clamp a raw percentage value into the valid `0..=100` range.
+pub(crate) fn clamp_percentage(value: f64) -> u64 {
+    value.clamp(0.0, 100.0) as u64
+}

@@ -2,7 +2,7 @@ use crate::{
     error::AppResult,
     model::{ProviderCredentials, ProviderKind},
 };
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs, path::Path};
 use time::OffsetDateTime;
@@ -15,6 +15,10 @@ struct RawAuthFile {
     #[serde(alias = "codex")]
     #[serde(rename = "openai-codex")]
     openai_codex: Option<RawProviderAuth>,
+    /// Any other top-level keys (other providers, metadata) are preserved
+    /// verbatim so persisting refreshed tokens doesn't drop unrelated data.
+    #[serde(flatten)]
+    extra: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -31,6 +35,9 @@ struct RawProviderAuth {
     expires_ms: Option<i64>,
     #[serde(rename = "accountId", skip_serializing_if = "Option::is_none")]
     account_id: Option<String>,
+    /// Any other per-provider keys are preserved verbatim.
+    #[serde(flatten)]
+    extra: HashMap<String, serde_json::Value>,
 }
 
 fn default_oauth_type() -> String {

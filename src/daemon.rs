@@ -260,7 +260,7 @@ where
                 snapshot.provider == provider
                     && snapshot.window_kind == window_kind
                     && (snapshot.reset_at.is_some_and(|r| r > reset_at)
-                        || matches!((usage, snapshot.usage), (Some(previous), Some(current)) if current < previous))
+                        || matches!((usage, snapshot.usage), (Some(previous), Some(current)) if previous.saturating_sub(current) >= 50))
             });
 
             if confirmed {
@@ -359,7 +359,7 @@ where
         };
 
         match fetch_with_refresh(provider, &provider_creds, now).await {
-            Ok((_creds, provider_snapshots)) => snapshots.extend(provider_snapshots),
+            Ok(provider_snapshots) => snapshots.extend(provider_snapshots),
             Err(error) => {
                 warn!(provider = provider.kind().as_str(), error = %error, "provider poll failed")
             }

@@ -2,7 +2,7 @@ use crate::{
     auth,
     error::AppResult,
     model::{ProviderCredentials, ProviderKind, QuotaSnapshot, WindowKind},
-    providers::{ProviderRequestError, QuotaProvider},
+    providers::{ProviderRequestError, QuotaProvider, clamp_percentage},
 };
 use anyhow::{Context, anyhow};
 use async_trait::async_trait;
@@ -86,10 +86,6 @@ struct RateLimitWindow {
     reset_time_ms: Option<i64>,
 }
 
-/// Clamp a raw percentage value into the valid `0..=100` range.
-fn clamp_percentage(value: f64) -> u64 {
-    value.clamp(0.0, 100.0) as u64
-}
 
 fn parse_reset_timestamp(value: Option<serde_json::Value>) -> Option<OffsetDateTime> {
     match value {

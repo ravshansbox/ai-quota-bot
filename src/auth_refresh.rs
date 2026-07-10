@@ -17,7 +17,7 @@ pub async fn fetch_with_refresh<P: QuotaProvider>(
     provider: &P,
     creds: &ProviderCredentials,
     now: OffsetDateTime,
-) -> AppResult<(ProviderCredentials, Vec<QuotaSnapshot>)> {
+) -> AppResult<Vec<QuotaSnapshot>> {
     let active_creds = if should_refresh(creds, now, Duration::minutes(5)) {
         info!(
             provider = provider.kind().as_str(),
@@ -35,7 +35,7 @@ pub async fn fetch_with_refresh<P: QuotaProvider>(
                 snapshots = snapshots.len(),
                 "fetch succeeded"
             );
-            Ok((active_creds, snapshots))
+            Ok(snapshots)
         }
         Err(ProviderRequestError::Authentication) => {
             info!(
@@ -52,7 +52,7 @@ pub async fn fetch_with_refresh<P: QuotaProvider>(
                 snapshots = snapshots.len(),
                 "fetch succeeded after refresh"
             );
-            Ok((refreshed, snapshots))
+            Ok(snapshots)
         }
         Err(ProviderRequestError::Other(err)) => {
             warn!(provider = provider.kind().as_str(), "fetch failed: {}", err,);

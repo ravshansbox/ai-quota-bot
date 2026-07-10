@@ -100,7 +100,7 @@ pub fn format_provider_line(
     snapshots: &[QuotaSnapshot],
     now: OffsetDateTime,
 ) -> String {
-    let provider_name = display_provider(provider);
+    let provider_name = provider.as_str();
     let mut parts: Vec<String> = Vec::new();
 
     for window_kind in [WindowKind::SevenDays, WindowKind::FiveHours] {
@@ -172,9 +172,3 @@ pub fn format_summary_message(
     format!("{}\n{}", header, lines.join("\n"))
 }
 
-fn display_provider(provider: ProviderKind) -> &'static str {
-    match provider {
-        ProviderKind::Claude => "claude",
-        ProviderKind::Codex => "codex",
-    }
-}
