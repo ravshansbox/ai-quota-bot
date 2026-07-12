@@ -339,11 +339,10 @@ where
     }
 
     async fn send_startup_summary(&mut self, snapshots: &[QuotaSnapshot], now: OffsetDateTime) {
-        let summary = format_summary_message(snapshots, None, now);
-        if summary.is_empty() {
+        let Some(summary) = self.format_status_message(snapshots, now) else {
             info!("no snapshots to summarize on startup");
             return;
-        }
+        };
         info!("sending startup summary");
         match self.notifier.notify_text(&summary).await {
             Ok(message_id) => self.summary_message_id = message_id,
@@ -357,19 +356,31 @@ where
         let Some(message_id) = self.summary_message_id else {
             return;
         };
-        let body = format_summary_body(&self.latest_snapshots, None, now);
-        if body.is_empty() {
+        let Some(message) = self.format_status_message(&self.latest_snapshots.clone(), now) else {
             return;
+        };
+        if let Err(e) = self.notifier.edit_text(message_id, &message).await {
+            warn!(error = %e, "failed to update startup summary");
         }
-        let message = format!(
+    }
+
+    /// Build the live status message shown as the persistent, edited-in-place
+    /// summary. Returns `None` when there are no snapshots to display.
+    fn format_status_message(
+        &self,
+        snapshots: &[QuotaSnapshot],
+        now: OffsetDateTime,
+    ) -> Option<String> {
+        let body = format_summary_body(snapshots, None, now);
+        if body.is_empty() {
+            return None;
+        }
+        Some(format!(
             "📊 Quota status\n{}\n\nUpdated {:02}:{:02} UTC",
             body,
             now.hour(),
             now.minute(),
-        );
-        if let Err(e) = self.notifier.edit_text(message_id, &message).await {
-            warn!(error = %e, "failed to update startup summary");
-        }
+        ))
     }
 
     async fn collect_provider_snapshots<P>(
