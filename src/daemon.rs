@@ -142,11 +142,11 @@ where
     }
 
     pub async fn run_forever(&mut self) -> AppResult<()> {
-        // Run the first cycle immediately and send a startup summary.
+        // Run the first cycle immediately; run_cycle_at posts the live status
+        // message and every later cycle edits it in place.
         let now = OffsetDateTime::now_utc();
         let snapshots = self.run_cycle_at(now).await;
         self.schedule_from_snapshots(&snapshots);
-        self.send_startup_summary(&snapshots, now).await;
 
         let interval_secs = self.config.poll_interval_secs;
 
@@ -338,29 +338,22 @@ where
         }
     }
 
-    async fn send_startup_summary(&mut self, snapshots: &[QuotaSnapshot], now: OffsetDateTime) {
-        let Some(summary) = self.format_status_message(snapshots, now) else {
-            info!("no snapshots to summarize on startup");
-            return;
-        };
-        info!("sending startup summary");
-        match self.notifier.notify_text(&summary).await {
-            Ok(message_id) => self.summary_message_id = message_id,
-            Err(e) => warn!(error = %e, "failed to send startup summary"),
-        }
-    }
-
-    /// Edit the startup summary message in place with the latest snapshots.
-    /// No-op until a startup summary has been sent successfully.
+    /// Post the live status message on the first cycle, then edit it in place
+    /// on every subsequent cycle. No-op when there are no snapshots to show.
     async fn update_summary_message(&mut self, now: OffsetDateTime) {
-        let Some(message_id) = self.summary_message_id else {
-            return;
-        };
         let Some(message) = self.format_status_message(&self.latest_snapshots.clone(), now) else {
             return;
         };
-        if let Err(e) = self.notifier.edit_text(message_id, &message).await {
-            warn!(error = %e, "failed to update startup summary");
+        match self.summary_message_id {
+            Some(message_id) => {
+                if let Err(e) = self.notifier.edit_text(message_id, &message).await {
+                    warn!(error = %e, "failed to update status message");
+                }
+            }
+            None => match self.notifier.notify_text(&message).await {
+                Ok(message_id) => self.summary_message_id = message_id,
+                Err(e) => warn!(error = %e, "failed to send status message"),
+            },
         }
     }
 
