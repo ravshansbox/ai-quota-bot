@@ -6,7 +6,7 @@ use crate::{
     error::AppResult,
     model::{ProviderKind, QuotaSnapshot, WindowKind, format_remaining},
     providers::QuotaProvider,
-    telegram::{ResetNotifier, format_summary_message},
+    telegram::{ResetNotifier, format_summary_body, format_summary_message},
 };
 use std::{
     collections::HashSet,
@@ -46,6 +46,10 @@ pub struct Daemon<P1, P2, N> {
     /// that reset notifications can show the full per-provider line
     /// (both 5h and 7d windows) matching the startup summary format.
     latest_snapshots: Vec<QuotaSnapshot>,
+    /// `message_id` of the startup summary message, so subsequent poll
+    /// cycles can edit it in place with fresh quota info instead of
+    /// posting a new message every time.
+    summary_message_id: Option<i64>,
 }
 
 impl<P1, P2, N> Daemon<P1, P2, N>
@@ -64,6 +68,7 @@ where
             scheduled: Vec::new(),
             scheduled_fired: HashSet::new(),
             latest_snapshots: Vec::new(),
+            summary_message_id: None,
         }
     }
 
@@ -98,6 +103,10 @@ where
                 "snapshot",
             );
         }
+
+        // Keep the startup summary message live by editing it in place with
+        // the freshest quota info gathered this cycle.
+        self.update_summary_message(now).await;
 
         let mut providers_to_notify = HashSet::new();
         for event in self.detector.detect(snapshots.clone()) {
@@ -329,15 +338,37 @@ where
         }
     }
 
-    async fn send_startup_summary(&self, snapshots: &[QuotaSnapshot], now: OffsetDateTime) {
+    async fn send_startup_summary(&mut self, snapshots: &[QuotaSnapshot], now: OffsetDateTime) {
         let summary = format_summary_message(snapshots, None, now);
         if summary.is_empty() {
             info!("no snapshots to summarize on startup");
             return;
         }
         info!("sending startup summary");
-        if let Err(e) = self.notifier.notify_text(&summary).await {
-            warn!(error = %e, "failed to send startup summary");
+        match self.notifier.notify_text(&summary).await {
+            Ok(message_id) => self.summary_message_id = message_id,
+            Err(e) => warn!(error = %e, "failed to send startup summary"),
+        }
+    }
+
+    /// Edit the startup summary message in place with the latest snapshots.
+    /// No-op until a startup summary has been sent successfully.
+    async fn update_summary_message(&mut self, now: OffsetDateTime) {
+        let Some(message_id) = self.summary_message_id else {
+            return;
+        };
+        let body = format_summary_body(&self.latest_snapshots, None, now);
+        if body.is_empty() {
+            return;
+        }
+        let message = format!(
+            "📊 Quota status\n{}\n\nUpdated {:02}:{:02} UTC",
+            body,
+            now.hour(),
+            now.minute(),
+        );
+        if let Err(e) = self.notifier.edit_text(message_id, &message).await {
+            warn!(error = %e, "failed to update startup summary");
         }
     }
 
