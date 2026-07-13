@@ -35,16 +35,10 @@ async fn run() -> anyhow::Result<()> {
         config.telegram_bot_token.clone(),
         config.telegram_chat_id.clone(),
     );
-    let claude = ClaudeProvider::new(
-        std::env::var("AI_QUOTA_CLAUDE_BASE_URL")
-            .unwrap_or_else(|_| "https://api.anthropic.com".to_string()),
-    )
-    .with_auth_path(config.auth_path.clone());
-    let codex = CodexProvider::new(
-        std::env::var("AI_QUOTA_CODEX_BASE_URL")
-            .unwrap_or_else(|_| "https://chatgpt.com".to_string()),
-    )
-    .with_auth_path(config.auth_path.clone());
+    let claude = ClaudeProvider::new("https://api.anthropic.com".to_string())
+        .with_auth_path(config.auth_path.clone());
+    let codex = CodexProvider::new("https://chatgpt.com".to_string())
+        .with_auth_path(config.auth_path.clone());
 
     let mut daemon = Daemon::new(config, notifier, claude, codex);
     daemon.run_forever().await

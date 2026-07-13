@@ -11,10 +11,7 @@ Required environment variables:
 
 Optional environment variables:
 
-- `AI_QUOTA_AUTH_PATH` override for the auth file path. Default: `$HOME/.pi/agent/auth.json`
 - `AI_QUOTA_POLL_INTERVAL_SECS` poll interval in seconds. Default: `600`
-- `AI_QUOTA_CLAUDE_BASE_URL` Claude API base URL override. Default: `https://api.anthropic.com`
-- `AI_QUOTA_CODEX_BASE_URL` Codex API base URL override. Default: `https://chatgpt.com`
 
 ## Auth file
 

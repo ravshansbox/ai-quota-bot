@@ -17,13 +17,9 @@ impl AppConfig {
         let telegram_chat_id =
             env::var("TELEGRAM_CHAT_ID").map_err(|_| anyhow!("missing TELEGRAM_CHAT_ID"))?;
 
-        let auth_path = env::var("AI_QUOTA_AUTH_PATH")
-            .map(PathBuf::from)
-            .or_else(|_| {
-                env::var("HOME")
-                    .map(|home| PathBuf::from(home).join(".pi/agent/auth.json"))
-                    .map_err(|_| anyhow!("missing AI_QUOTA_AUTH_PATH and HOME"))
-            })?;
+        let auth_path = env::var("HOME")
+            .map(|home| PathBuf::from(home).join(".pi/agent/auth.json"))
+            .map_err(|_| anyhow!("missing HOME"))?;
 
         let poll_interval_secs = env::var("AI_QUOTA_POLL_INTERVAL_SECS")
             .ok()
