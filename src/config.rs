@@ -1,5 +1,5 @@
 use crate::error::AppResult;
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use std::{env, path::PathBuf};
 
 #[derive(Debug, Clone)]
