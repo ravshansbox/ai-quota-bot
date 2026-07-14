@@ -32,9 +32,9 @@ impl ResetDetector {
             if self.initialized
                 && let Some(prev) = self.previous.get(&key)
                 && let (Some(previous_usage), Some(current_usage)) = (prev.usage, snapshot.usage)
-                // Codex windows slide, so usage drifts down without a real
-                // reset. Only a large drop (>=50 points) signals a rollover.
-                && previous_usage.saturating_sub(current_usage) >= 50
+                // Any drop in usage means quota was freed (a reset or refund);
+                // notify on every increase in available quota.
+                && current_usage < previous_usage
             {
                 events.push(ResetEvent {
                     provider: snapshot.provider,
