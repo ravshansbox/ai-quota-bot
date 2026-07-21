@@ -102,6 +102,7 @@ impl QuotaProvider for ClaudeProvider {
                 usage: Some(clamp_percentage(entry.utilization)),
                 limit: Some(100),
                 resets_available: 0,
+                reset_soonest_expiry: None,
             });
         }
 
@@ -115,6 +116,7 @@ impl QuotaProvider for ClaudeProvider {
                 usage: Some(clamp_percentage(entry.utilization)),
                 limit: Some(100),
                 resets_available: 0,
+                reset_soonest_expiry: None,
             });
         }
 

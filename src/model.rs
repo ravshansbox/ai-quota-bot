@@ -56,6 +56,9 @@ pub struct QuotaSnapshot {
     /// OpenAI Codex "reset credits" available to instantly reset the
     /// weekly window. Always 0 for Claude.
     pub resets_available: u64,
+    /// When the soonest available Codex reset credit expires. `None` for
+    /// Claude or when there are no credits.
+    pub reset_soonest_expiry: Option<OffsetDateTime>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

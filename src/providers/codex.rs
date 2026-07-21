@@ -46,6 +46,47 @@ impl CodexProvider {
             ..self
         }
     }
+
+    /// Best-effort lookup of the soonest-expiring available reset credit.
+    /// Returns `None` on any request/parse error so it never fails the poll.
+    async fn fetch_soonest_reset_expiry(
+        &self,
+        access_token: &str,
+        account_id: &str,
+    ) -> Option<OffsetDateTime> {
+        let response = self
+            .client
+            .get(format!(
+                "{}/backend-api/wham/rate-limit-reset-credits",
+                self.base_url
+            ))
+            .bearer_auth(access_token)
+            .header("ChatGPT-Account-Id", account_id)
+            .header("Origin", "https://chatgpt.com")
+            .header("Referer", "https://chatgpt.com/")
+            .send()
+            .await
+            .ok()?
+            .error_for_status()
+            .ok()?
+            .json::<CodexResetCreditList>()
+            .await
+            .ok()?;
+
+        let now = OffsetDateTime::now_utc();
+        response
+            .credits
+            .into_iter()
+            .filter(|c| {
+                c.status
+                    .as_deref()
+                    .map(|s| s == "available")
+                    .unwrap_or(true)
+            })
+            .filter_map(|c| parse_reset_timestamp(c.expires_at))
+            .filter(|expiry| *expiry > now)
+            .min()
+    }
 }
 
 /// Real Codex usage endpoint
@@ -60,6 +101,19 @@ struct CodexUsageResponse {
 #[derive(Debug, Deserialize)]
 struct RateLimitResetCredits {
     available_count: Option<u64>,
+}
+
+/// Response of `https://chatgpt.com/backend-api/wham/rate-limit-reset-credits`
+#[derive(Debug, Deserialize)]
+struct CodexResetCreditList {
+    #[serde(default)]
+    credits: Vec<CodexResetCredit>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CodexResetCredit {
+    status: Option<String>,
+    expires_at: Option<serde_json::Value>, // epoch seconds or ISO string
 }
 
 #[derive(Debug, Deserialize)]
@@ -144,6 +198,15 @@ impl QuotaProvider for CodexProvider {
             .and_then(|c| c.available_count)
             .unwrap_or(0);
 
+        // When reset credits exist, look up when the soonest one expires so the
+        // summary can show "next expires in Xd Yh".
+        let reset_soonest_expiry = if resets_available > 0 {
+            self.fetch_soonest_reset_expiry(&creds.access_token, account_id)
+                .await
+        } else {
+            None
+        };
+
         // Try to extract the 5h primary window
         let five_hour = payload
             .rate_limit
@@ -171,6 +234,7 @@ impl QuotaProvider for CodexProvider {
                 usage: Some(used),
                 limit: Some(100),
                 resets_available,
+                reset_soonest_expiry,
             });
         }
 
@@ -194,6 +258,7 @@ impl QuotaProvider for CodexProvider {
                 usage: Some(used),
                 limit: Some(100),
                 resets_available,
+                reset_soonest_expiry,
             });
         }
 

@@ -133,7 +133,7 @@ pub fn format_window_line(
 ) -> String {
     let label = window_kind.as_str();
     let pct = match (usage, limit) {
-        (Some(u), Some(l)) if l > 0 => format!("{}% used", u * 100 / l),
+        (Some(u), Some(l)) if l > 0 => format!("{}% left", 100 - (u * 100 / l).min(100)),
         _ => "?".to_string(),
     };
     let remaining = format_remaining(reset_at, now);
@@ -164,10 +164,16 @@ pub fn format_provider_line(
 
     let resets_available = snapshots.iter().map(|s| s.resets_available).max().unwrap_or(0);
     if resets_available > 0 {
+        let soonest = snapshots.iter().filter_map(|s| s.reset_soonest_expiry).min();
+        let expiry = match soonest {
+            Some(_) => format!(", next expires in {}", format_remaining(soonest, now)),
+            None => String::new(),
+        };
         parts.push(format!(
-            "{} reset{}",
+            "{} reset{}{}",
             resets_available,
-            if resets_available == 1 { "" } else { "s" }
+            if resets_available == 1 { "" } else { "s" },
+            expiry
         ));
     }
 
