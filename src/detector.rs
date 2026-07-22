@@ -1,6 +1,5 @@
 use crate::model::{ProviderKind, QuotaSnapshot, ResetEvent, WindowKind};
 use std::collections::HashMap;
-use time::OffsetDateTime;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct SnapshotKey {
@@ -11,12 +10,11 @@ struct SnapshotKey {
 #[derive(Debug, Clone)]
 struct CachedState {
     usage: Option<u64>,
-    reset_at: Option<OffsetDateTime>,
 }
 
-/// When a window has no `reset_at` we cannot rely on the boundary rolling
-/// forward, so we fall back to a usage drop. Any freed quota counts, so even a
-/// 1 point drop notifies. Percentages are 0..=100.
+/// A reset is only worth reporting when quota is actually freed, so any
+/// downward move in usage counts, down to a single point. Percentages are
+/// 0..=100.
 const USAGE_DROP_THRESHOLD: u64 = 1;
 
 #[derive(Default)]
@@ -49,13 +47,7 @@ impl ResetDetector {
                 });
             }
 
-            next.insert(
-                key,
-                CachedState {
-                    usage: snapshot.usage,
-                    reset_at: snapshot.reset_at,
-                },
-            );
+            next.insert(key, CachedState { usage: snapshot.usage });
         }
 
         self.previous = next;
@@ -64,20 +56,15 @@ impl ResetDetector {
     }
 }
 
-/// A genuine reset is detected when the window boundary rolls forward to a new
-/// window. That timestamp only changes on a real reset, so it is immune to the
-/// small downward jitter in `used_percent` that occurs on ordinary polls.
-///
-/// When `reset_at` is unavailable for the window we fall back to requiring a
-/// large drop in usage, which still ignores routine jitter.
+/// A genuine reset frees quota, so we detect it purely from a drop in usage.
+/// The `reset_at` boundary is unreliable for this: it can creep forward by a
+/// few seconds between polls without any quota being freed, which previously
+/// produced spurious "reset detected" notifications even as usage rose.
 fn is_reset(prev: &CachedState, current: &QuotaSnapshot) -> bool {
-    match (prev.reset_at, current.reset_at) {
-        (Some(previous_reset), Some(current_reset)) => current_reset > previous_reset,
-        _ => match (prev.usage, current.usage) {
-            (Some(previous_usage), Some(current_usage)) => {
-                previous_usage.saturating_sub(current_usage) >= USAGE_DROP_THRESHOLD
-            }
-            _ => false,
-        },
+    match (prev.usage, current.usage) {
+        (Some(previous_usage), Some(current_usage)) => {
+            previous_usage.saturating_sub(current_usage) >= USAGE_DROP_THRESHOLD
+        }
+        _ => false,
     }
 }
