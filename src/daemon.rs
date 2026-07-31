@@ -82,10 +82,6 @@ where
             );
         }
 
-        // Keep the startup summary message live by editing it in place with
-        // the freshest quota info gathered this cycle.
-        self.update_summary_message(now).await;
-
         let mut providers_to_notify = HashSet::new();
         for event in self.detector.detect(snapshots.clone()) {
             info!(
@@ -96,15 +92,30 @@ where
             providers_to_notify.insert(event.provider);
         }
 
+        let mut posted_other_messages = false;
         for provider in providers_to_notify {
             let message = format_summary_message(&self.latest_snapshots, Some(&[provider]), now);
-            if !message.is_empty()
-                && let Err(e) = self.notifier.notify_text(&message).await
-            {
-                warn!(provider = provider.as_str(), error = %e, "failed to send reset notification");
+            if !message.is_empty() {
+                match self.notifier.notify_text(&message).await {
+                    Ok(_) => posted_other_messages = true,
+                    Err(e) => {
+                        warn!(provider = provider.as_str(), error = %e, "failed to send reset notification")
+                    }
+                }
             }
             self.ping_provider(provider);
         }
+
+        // Keep the status message live and last in the conversation: edit it in
+        // place normally, but when other messages were posted this cycle,
+        // delete and repost it so it stays at the bottom.
+        if posted_other_messages
+            && let Some(message_id) = self.summary_message_id.take()
+            && let Err(e) = self.notifier.delete_text(message_id).await
+        {
+            warn!(error = %e, "failed to delete stale status message");
+        }
+        self.update_summary_message(now).await;
 
         snapshots
     }

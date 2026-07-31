@@ -16,6 +16,9 @@ pub trait ResetNotifier: Send + Sync {
 
     /// Edit a previously sent message in place.
     async fn edit_text(&self, message_id: i64, text: &str) -> AppResult<()>;
+
+    /// Delete a previously sent message.
+    async fn delete_text(&self, message_id: i64) -> AppResult<()>;
 }
 
 #[derive(Clone, Debug)]
@@ -34,6 +37,10 @@ impl ResetNotifier for TelegramClient {
 
     async fn edit_text(&self, message_id: i64, text: &str) -> AppResult<()> {
         self.edit_message_text(message_id, text).await
+    }
+
+    async fn delete_text(&self, message_id: i64) -> AppResult<()> {
+        self.delete_message(message_id).await
     }
 }
 
@@ -98,6 +105,23 @@ impl TelegramClient {
 
         Ok(())
     }
+
+    pub async fn delete_message(&self, message_id: i64) -> AppResult<()> {
+        let url = format!("{}/bot{}/deleteMessage", self.api_base, self.bot_token);
+        let body = DeleteMessageBody {
+            chat_id: self.chat_id.clone(),
+            message_id,
+        };
+
+        self.client
+            .post(url)
+            .json(&body)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -111,6 +135,12 @@ struct EditMessageBody {
     chat_id: String,
     message_id: i64,
     text: String,
+}
+
+#[derive(Debug, Serialize)]
+struct DeleteMessageBody {
+    chat_id: String,
+    message_id: i64,
 }
 
 #[derive(Debug, Deserialize)]
